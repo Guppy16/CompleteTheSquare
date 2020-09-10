@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Complete The Square</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/play.css') }}">
+</head>
+<body>
+  {% extends "template.html" %}
+  {% block content %}
+
+    <h1>Time to play :) </h1>  
+    
+    <h2 style="color:red;"> {{ messages['name1'] }} vs {{ messages['name2'] }} </h2>
+
+    <div class="overall-container">
+      <div class="flex-container">
+
+        <div id= "1">
+          <button onclick="move_made(this)" id = "a1" name = {{ messages['curr_game_name'] }}></button>
+          <button onclick="move_made(this)" id = "b1" name = {{ messages['curr_game_name'] }}></button>
+          <button onclick="move_made(this)" id = "c1" name = {{ messages['curr_game_name'] }}></button>
+          <button onclick="move_made(this)" id = "d1" name = {{ messages['curr_game_name'] }}></button>
+          <button onclick="move_made(this)" id = "e1" name = {{ messages['curr_game_name'] }}></button>
+        </div> 
+
+        <div id= "2">
+          <button onclick="move_made(this)" id = "a2" name = {{ messages['curr_game_name'] }}></button>
+          <button onclick="move_made(this)" id = "b2" name = {{ messages['curr_game_name'] }}></button>
+          <button onclick="move_made(this)" id = "c2" name = {{ messages['curr_game_name'] }}></button>
+          <button onclick="move_made(this)" id = "d2" name = {{ messages['curr_game_name'] }}></button>
+          <button onclick="move_made(this)" id = "e2" name = {{ messages['curr_game_name'] }}></button>
+        </div>
+
+        <div id= "3">
+          <button onclick="move_made(this)" id = "a3" name = {{ messages['curr_game_name'] }}></button>
+          <button onclick="move_made(this)" id = "b3" name = {{ messages['curr_game_name'] }}></button>
+          <button onclick="move_made(this)" id = "c3" name = {{ messages['curr_game_name'] }}></button>
+          <button onclick="move_made(this)" id = "d3" name = {{ messages['curr_game_name'] }}></button>
+          <button onclick="move_made(this)" id = "e3" name = {{ messages['curr_game_name'] }}></button>
+        </div>
+
+        <div id= "4">
+          <button onclick="move_made(this)" id = "a4" name = {{ messages['curr_game_name'] }}></button>
+          <button onclick="move_made(this)" id = "b4" name = {{ messages['curr_game_name'] }}></button>
+          <button onclick="move_made(this)" id = "c4" name = {{ messages['curr_game_name'] }}></button>
+          <button onclick="move_made(this)" id = "d4" name = {{ messages['curr_game_name'] }}></button>
+          <button onclick="move_made(this)" id = "e4" name = {{ messages['curr_game_name'] }}></button>
+        </div>
+
+        <div id= "5">
+          <button onclick="move_made(this)" id = "a5" name = {{ messages['curr_game_name'] }}></button>
+          <button onclick="move_made(this)" id = "b5" name = {{ messages['curr_game_name'] }}></button>
+          <button onclick="move_made(this)" id = "c5" name = {{ messages['curr_game_name'] }}></button>
+          <button onclick="move_made(this)" id = "d5" name = {{ messages['curr_game_name'] }}></button>
+          <button onclick="move_made(this)" id = "e5" name = {{ messages['curr_game_name'] }}></button>
+        </div>
+
+      </div>
+    </div>
+    <script src="{{url_for('static', filename='js/play.js')}}"></script>
+    {% endblock %}
+    
+</body>
+</html>
