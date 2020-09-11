@@ -264,6 +264,25 @@ class Game:
             print("This was an invalid move")
             return None
 
+def translate_coordinate_to_num(move):
+    """Translate from a letter-number system to an integer convention"""
+    firstChar = move[0]
+    secondChar = move[1]
+
+    newSecond = secondChar
+    if firstChar=='a':
+        newFirst = '1'
+    elif firstChar=='b':
+        newFirst = '2'
+    elif firstChar=='c':
+        newFirst = '3'
+    elif firstChar=='d':
+        newFirst = '4'
+    elif firstChar=='e':
+        newFirst = '5'
+
+    return newFirst+newSecond
+
 def initialise_game(name1, name2, curr_game_name):
     player1 = Player(name1, 'W')
     player2 = Player(name2, 'B')
