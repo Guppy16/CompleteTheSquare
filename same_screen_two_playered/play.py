@@ -270,7 +270,7 @@ def initialise_game(name1, name2, curr_game_name):
     object_list = [player1, player2, game]
     # Create file and write objects to it
     file_name = curr_game_name+'.pkl'
-    with open(file_name, 'w') as f:
+    with open(file_name, 'wb') as f:
         pickle.dump(object_list, f)
 
 def receive_move(as_json):
@@ -283,10 +283,24 @@ def receive_move(as_json):
     curr_game_name = as_dict['curr_game_name']
 
     # Retrieve objects from file of curr_game_name
+    file_name = curr_game_name+'.pkl'
+    with open(file_name, 'rb') as f:
+        object_list = pickle.load(f)
+
+    player1 = object_list[0]
+    player2 = object_list[1]
+    game = object_list[2]
+
     # Determine whether the newest move is made by player 1 or player 2
 
     transMove = translate(move)
+
+    # 
+
     gameFinished = game.make_move(player, transMove)
 
     if gameFinished:
         print("Game Over")
+        # Save all game moves to a central file
+
+        # Delete the temporary game pickle file
