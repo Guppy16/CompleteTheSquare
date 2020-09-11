@@ -1,4 +1,5 @@
 import pickle
+import json
 
 class Player:
     """A white or black player"""
@@ -295,9 +296,9 @@ def initialise_game(name1, name2, curr_game_name):
 
 def receive_move(as_json):
 
-    as_dict = json.loads(as_json)
-    move = as_dict['move']
-    curr_game_name = as_dict['curr_game_name']
+    #as_dict = json.loads(as_json)
+    move = as_json['move']
+    curr_game_name = as_json['curr_game_name']
 
     # Retrieve objects from file of curr_game_name
     file_name = curr_game_name+'.pkl'
