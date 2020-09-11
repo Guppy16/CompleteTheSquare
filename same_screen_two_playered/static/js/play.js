@@ -18,12 +18,28 @@ function move_made(buttObj) {
           "content-type": "application/json"
         })
     }).then(function (response) { // At this point, Flask has printed our JSON
-        return response.text();
-    }).then(function (text) {
+        return response.json();
+    }).then(function (json) {
 
         console.log('POST response: ');
 
         // Should be 'OK' if everything was successful
-        console.log(text);
+        console.log(JSON.stringify(json));
     });
+
+    // Get all player 1 positions
+    // Get all player 2 positions
+
+    // fetch('/passData')
+    //     .then(function (response) {
+    //         return response.json();
+    //     })
+    //     .then(function (json) {
+    //         p1_pos = json["p1"];
+    //         p2_pos = json["p2"];
+    //         console.log(p1_pos);
+    //     });
+
+
+    // Make correct counters appear for each player
 };

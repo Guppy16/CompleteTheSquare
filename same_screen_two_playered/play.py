@@ -284,6 +284,25 @@ def translate_coordinate_to_num(move):
 
     return newFirst+newSecond
 
+def translate_num_to_coordinate(move):
+    """DeTranslate from a integer convention system to letter-number"""
+    firstChar = move[0]
+    secondChar = move[1]
+
+    newSecond = secondChar
+    if firstChar=='1':
+        newFirst = 'a'
+    elif firstChar=='2':
+        newFirst = 'b'
+    elif firstChar=='3':
+        newFirst = 'c'
+    elif firstChar=='4':
+        newFirst = 'd'
+    elif firstChar=='5':
+        newFirst = 'e'
+
+    return newFirst+newSecond
+
 def initialise_game(name1, name2, curr_game_name):
     player1 = Player(name1, 'W')
     player2 = Player(name2, 'B')
@@ -319,6 +338,7 @@ def receive_move(as_json):
     # Update the game object
     gameFinished = game.make_move(player_num, transMove)
 
+    
 
     if gameFinished:
         print("Game Over")
@@ -329,3 +349,30 @@ def receive_move(as_json):
         # Write updated game object to temporary pickle file
         with open(file_name, 'wb') as f:
             pickle.dump(game, f)
+
+    player1_pos = game.player1.pieces
+    player2_pos = game.player2.pieces
+
+    # Translate back to letter-number system
+    player1_pos = [translate_num_to_coordinate(pos) for pos in player1_pos]
+    player2_pos = [translate_num_to_coordinate(pos) for pos in player2_pos]
+
+    message = {"p1": player1_pos, "p2": player2_pos}
+    return message
+
+# def get_positions(req):
+#     curr_game_name = req['curr_game_name']
+#     # Retrieve objects from file of curr_game_name
+#     file_name = curr_game_name+'.pkl'
+#     with open(file_name, 'rb') as f:
+#         game = pickle.load(f)
+
+#     player1_pos = game.player1.pieces
+#     player2_pos = game.player2.pieces
+
+#     # Translate back to letter-number system
+#     player1_pos = [translate_num_to_coordinate(pos) for pos in player1_pos]
+#     player2_pos = [translate_num_to_coordinate(pos) for pos in player2_pos]
+
+#     message = {"p1": player1_pos, "p2": player2_pos}
+#     return message

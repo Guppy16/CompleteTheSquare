@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, request, url_for
+from flask import Flask, render_template, redirect, request, url_for, jsonify
 from play import initialise_game, receive_move
 import random
 
@@ -8,8 +8,13 @@ app = Flask(__name__)
 def passData():
     if request.method == "POST":
         req = request.get_json()
-        receive_move(req)
-    return 'OK', 200
+        # receive_move(req)
+        player_pos = receive_move(req)
+        # return '200 ok'
+        return jsonify(player_pos)
+    # else:
+    #     player_positions = get_positions(req)
+    #     return player_positions
 
 @app.route('/', methods=["GET", "POST"])
 def signup():
