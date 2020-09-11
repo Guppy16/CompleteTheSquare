@@ -17,6 +17,7 @@ class Game:
     def __init__(self, player1, player2):
         self.player1 = player1
         self.player2 = player2
+        self.all_moves = []
 
     def _valid_move(self, newPos):
         valid = True
@@ -255,6 +256,7 @@ class Game:
             current_player = self.player2       # Objects are passed by reference    
         if self._valid_move(newPos):
             current_player.update_pieces(newPos)
+            self.all_moves.append(newPos)
             gameFinished = self._check_for_win(newPos, current_player)
             self._check_for_piece_removal( newPos, player)
             return gameFinished
@@ -266,17 +268,13 @@ def initialise_game(name1, name2, curr_game_name):
     player1 = Player(name1, 'W')
     player2 = Player(name2, 'B')
     game = Game(player1, player2)
-    
-    object_list = [player1, player2, game]
-    # Create file and write objects to it
+
+    # Create file and write game object to it
     file_name = curr_game_name+'.pkl'
     with open(file_name, 'wb') as f:
-        pickle.dump(object_list, f)
+        pickle.dump(game, f)
 
 def receive_move(as_json):
-    # Retrieve objects from file of curr_game_name
-    # Determine whether the newest move is made by player 1 or player 2
-    # 'player' is a boolean variable
 
     as_dict = json.loads(as_json)
     move = as_dict['move']
@@ -285,22 +283,29 @@ def receive_move(as_json):
     # Retrieve objects from file of curr_game_name
     file_name = curr_game_name+'.pkl'
     with open(file_name, 'rb') as f:
-        object_list = pickle.load(f)
-
-    player1 = object_list[0]
-    player2 = object_list[1]
-    game = object_list[2]
+        game = pickle.load(f)
 
     # Determine whether the newest move is made by player 1 or player 2
+    move_num = len(game.all_moves)
+    if move_num%2 == 0:
+        #even number of moves
+        player_num = 1
+    else:
+        player_num = 2
 
-    transMove = translate(move)
+    # Translate move to style used for game class
+    transMove = translate_coordinate_to_num(move)
 
-    # 
+    # Update the game object
+    gameFinished = game.make_move(player_num, transMove)
 
-    gameFinished = game.make_move(player, transMove)
 
     if gameFinished:
         print("Game Over")
         # Save all game moves to a central file
 
         # Delete the temporary game pickle file
+    else:
+        # Write updated game object to temporary pickle file
+        with open(file_name, 'wb') as f:
+            pickle.dump(game, f)
