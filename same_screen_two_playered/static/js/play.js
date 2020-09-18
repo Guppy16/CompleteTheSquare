@@ -22,9 +22,33 @@ function move_made(buttObj) {
     }).then(function (json) {
 
         console.log('POST response: ');
-
-        // Should be 'OK' if everything was successful
         console.log(JSON.stringify(json));
+
+        // Loop through all positions on the board and set the colours to blank
+        // Enable all buttons
+        //TODO
+        var all_ids = ['a1', 'a2', 'a3', 'a4', 'a5', 'b1', 'b2', 'b3', 'b4', 'b5', 'c1', 'c2', 'c3', 'c4', 'c5', 'd1', 'd2', 'd3', 'd4', 'd5', 'e1', 'e2', 'e3', 'e4', 'e5'];
+
+        for (i of all_ids){
+            document.getElementById(i).style.backgroundColor = "white";
+            document.getElementById(i).disabled = false;
+        }
+
+        var all_pos = JSON.parse(JSON.stringify(json));
+        // Loop through player 1 positions, set colours and disable
+        p1_pos = all_pos['p1'];
+        for (pos of p1_pos){
+            document.getElementById(pos).style.backgroundColor = "yellow";
+            document.getElementById(pos).disabled = true;
+        }
+
+        // Loop through player 2 positions, set colours and disable
+        p2_pos = all_pos['p2'];
+        for (pos of p2_pos){
+            document.getElementById(pos).style.backgroundColor = "green";
+            document.getElementById(pos).disabled = true;
+        }
+
     });
 
     // Get all player 1 positions
