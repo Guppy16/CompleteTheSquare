@@ -1,5 +1,6 @@
 import pickle
 import json
+import os
 
 class Player:
     """A white or black player"""
@@ -339,12 +340,15 @@ def receive_move(as_json):
     gameFinished = game.make_move(player_num, transMove)
 
     
-
+    game_over = 0
     if gameFinished:
         print("Game Over")
         # Save all game moves to a central file
 
+        game_over = 1
+
         # Delete the temporary game pickle file
+        os.remove(file_name)
     else:
         # Write updated game object to temporary pickle file
         with open(file_name, 'wb') as f:
@@ -357,7 +361,7 @@ def receive_move(as_json):
     player1_pos = [translate_num_to_coordinate(pos) for pos in player1_pos]
     player2_pos = [translate_num_to_coordinate(pos) for pos in player2_pos]
 
-    message = {"p1": player1_pos, "p2": player2_pos}
+    message = {"p1": player1_pos, "p2": player2_pos, "game_over": game_over}
     return message
 
 # def get_positions(req):

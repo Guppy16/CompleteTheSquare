@@ -26,7 +26,7 @@ function move_made(buttObj) {
 
         // Loop through all positions on the board and set the colours to blank
         // Enable all buttons
-        //TODO
+        
         var all_ids = ['a1', 'a2', 'a3', 'a4', 'a5', 'b1', 'b2', 'b3', 'b4', 'b5', 'c1', 'c2', 'c3', 'c4', 'c5', 'd1', 'd2', 'd3', 'd4', 'd5', 'e1', 'e2', 'e3', 'e4', 'e5'];
 
         for (i of all_ids){
@@ -34,20 +34,30 @@ function move_made(buttObj) {
             document.getElementById(i).disabled = false;
         }
 
-        var all_pos = JSON.parse(JSON.stringify(json));
+        var all_data = JSON.parse(JSON.stringify(json));
         // Loop through player 1 positions, set colours and disable
-        p1_pos = all_pos['p1'];
+        p1_pos = all_data['p1'];
         for (pos of p1_pos){
-            document.getElementById(pos).style.backgroundColor = "yellow";
+            document.getElementById(pos).style.backgroundColor = "chartreuse";
             document.getElementById(pos).disabled = true;
         }
 
         // Loop through player 2 positions, set colours and disable
-        p2_pos = all_pos['p2'];
+        p2_pos = all_data['p2'];
         for (pos of p2_pos){
-            document.getElementById(pos).style.backgroundColor = "green";
+            document.getElementById(pos).style.backgroundColor = "tomato";
             document.getElementById(pos).disabled = true;
         }
+
+        // Check if game has finished
+        var game_over = all_data['game_over']
+        if (game_over == 1) {
+            for (pos of all_ids){
+                document.getElementById(pos).disabled = true;
+            }
+            window.alert("You just won!! Well Done!")
+        }
+
 
     });
 
