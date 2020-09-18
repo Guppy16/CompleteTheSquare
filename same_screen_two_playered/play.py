@@ -1,6 +1,7 @@
 import pickle
 import json
 import os
+from os import listdir
 
 class Player:
     """A white or black player"""
@@ -347,8 +348,11 @@ def receive_move(as_json):
 
         game_over = 1
 
-        # Delete the temporary game pickle file
-        os.remove(file_name)
+        # Delete the temporary game pickle file any old ones
+        #os.remove(file_name)
+        for pkl_file in listdir():
+            if pkl_file.endswith('.pkl'):
+                os.remove(pkl_file)
     else:
         # Write updated game object to temporary pickle file
         with open(file_name, 'wb') as f:
