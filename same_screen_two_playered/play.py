@@ -139,7 +139,7 @@ class Game:
         curr = pos
         newRow = int(curr[0])-1
         newCol = int(curr[1])-1
-        if newRow < 5 or newCol < 5:
+        if newRow < 1 or newCol < 1:
             # Out of range
             pass
         else:
