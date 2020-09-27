@@ -46,6 +46,10 @@ def play():
 def tic_tac_toe():
     return render_template("tic_tac_toe/tic_tac_toe.html")
 
+@app.route("/reading_club")
+def reading_club():
+    return render_template("reading_club/reading_club.html")
+
 # Remove this section of code when uploading onto pythonanywhere.com
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
