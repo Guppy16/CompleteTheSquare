@@ -1,3 +1,5 @@
+const BOARD_SIZE = 5; // Configurable board size
+
 class Player {
   constructor(name, colour) {
     this.name = name;
@@ -14,12 +16,13 @@ class Game {
     this.allMoves = [];
     this.current = p1;
     this.winningSquare = null;
+    this.boardSize = BOARD_SIZE; // Store board size in the game object
   }
 
   valid(pos) {
     const occupied = this.p1.pieces.has(pos) || this.p2.pieces.has(pos);
     const [r,c] = pos.split('').map(Number);
-    return !occupied && r>=1 && r<=5 && c>=1 && c<=5;
+    return !occupied && r>=1 && r<=this.boardSize && c>=1 && c<=this.boardSize;
   }
 
   // Get all possible corner positions that form a square with the given position
@@ -28,11 +31,11 @@ class Game {
     const corners = [];
     
     // Check all possible square sizes
-    for (let size = 1; size <= 4; size++) {
+    for (let size = 1; size <= this.boardSize-1; size++) {
       // Check all four possible squares with this position as a corner
       
       // Square with (r,c) as top-left
-      if (r+size <= 5 && c+size <= 5) {
+      if (r+size <= this.boardSize && c+size <= this.boardSize) {
         corners.push([
           `${r}${c}`,
           `${r}${c+size}`,
@@ -42,7 +45,7 @@ class Game {
       }
       
       // Square with (r,c) as top-right
-      if (r+size <= 5 && c-size >= 1) {
+      if (r+size <= this.boardSize && c-size >= 1) {
         corners.push([
           `${r}${c}`,
           `${r}${c-size}`,
@@ -52,7 +55,7 @@ class Game {
       }
       
       // Square with (r,c) as bottom-left
-      if (r-size >= 1 && c+size <= 5) {
+      if (r-size >= 1 && c+size <= this.boardSize) {
         corners.push([
           `${r}${c}`,
           `${r}${c+size}`,
@@ -89,9 +92,59 @@ class Game {
   }
   
   removePieces(pos) {
-    // For now, let's just implement a placeholder that doesn't remove any pieces
-    // You can implement the actual removal logic later
-    return;
+    const [row, col] = pos.split('').map(Number);
+    const currentPlayer = this.current;
+    const opponentPlayer = currentPlayer === this.p1 ? this.p2 : this.p1;
+    let piecesRemoved = false;
+    
+    // Define all possible directions
+    const directions = [
+      [1, 0], [1, 1], [0, 1], [-1, 1],
+      [-1, 0], [-1, -1], [0, -1], [1, -1]
+    ];
+    
+    // Check each direction
+    for (const [dx, dy] of directions) {
+      let capturedPieces = [];
+      let x = row + dx;
+      let y = col + dy;
+      
+      // Collect opponent pieces in this direction
+      while (
+        x >= 1 && x <= this.boardSize && 
+        y >= 1 && y <= this.boardSize && 
+        opponentPlayer.pieces.has(`${x}${y}`)
+      ) {
+        capturedPieces.push(`${x}${y}`);
+        x += dx;
+        y += dy;
+      }
+      
+      // If we found opponent pieces and ended at one of our pieces, capture them
+      if (
+        capturedPieces.length > 0 && 
+        x >= 1 && x <= this.boardSize && 
+        y >= 1 && y <= this.boardSize && 
+        currentPlayer.pieces.has(`${x}${y}`)
+      ) {
+        // Remove captured pieces
+        for (const capturedPos of capturedPieces) {
+          opponentPlayer.pieces.delete(capturedPos);
+          
+          // Update the UI
+          const cellToUpdate = document.querySelector(`.cell[data-pos="${capturedPos}"]`);
+          if (cellToUpdate) {
+            cellToUpdate.classList.remove(`player-${opponentPlayer.colour}`, 'disabled');
+            // Make the cell clickable again
+            cellToUpdate.classList.remove('disabled');
+          }
+        }
+        
+        piecesRemoved = true;
+      }
+    }
+    
+    return piecesRemoved;
   }
 
   makeMove(pos) {
@@ -123,6 +176,9 @@ const statusEl = document.getElementById('status');
 const resetButtonContainer = document.createElement('div');
 document.body.appendChild(resetButtonContainer);
 
+// Set CSS variables for board size - add this line
+document.documentElement.style.setProperty('--board-size', BOARD_SIZE);
+
 let game = new Game(new Player("You", "W"), new Player("AI", "B"));
 
 // Add this helper function to convert W/B to actual color names
@@ -149,13 +205,12 @@ function createColoredStatus(colorCode, isWinner = false) {
 
 function setupBoard() {
   boardEl.innerHTML = '';
-  // Update to show color name instead of W/B, with colored text
   statusEl.innerHTML = createColoredStatus(game.current.colour);
   resetButtonContainer.innerHTML = '';
   
-  // create 5×5 cells
-  for (let r=1; r<=5; r++) {
-    for (let c=1; c<=5; c++) {
+  // create BOARD_SIZE × BOARD_SIZE cells
+  for (let r=1; r<=BOARD_SIZE; r++) {
+    for (let c=1; c<=BOARD_SIZE; c++) {
       const cell = document.createElement('div');
       cell.classList.add('cell');
       cell.dataset.pos = `${r}${c}`;

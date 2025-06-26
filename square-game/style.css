@@ -1,6 +1,11 @@
+:root {
+  --cell-size: 60px;
+  /* board-size will be set from JavaScript */
+}
+
 #board {
   display: grid;
-  grid-template: repeat(5, 60px) / repeat(5, 60px);
+  grid-template: repeat(var(--board-size), var(--cell-size)) / repeat(var(--board-size), var(--cell-size));
   gap: 4px;
   margin: 20px;
 }
