@@ -1,5 +1,6 @@
 # Complete the Square Game
 
+View the [Complete the Square game online](https://Guppy16.github.io/CompleteTheSquare/).
 
 Adapted from: https://github.com/VatsalRaina/CompleteTheSquare
 
