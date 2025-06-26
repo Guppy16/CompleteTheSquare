@@ -1,5 +1,15 @@
 # Complete the Square Game
 
 
-
 Adapted from: https://github.com/VatsalRaina/CompleteTheSquare
+
+
+### Development
+
+To develop the js game locally, you can use the following commands:
+
+```bash
+python3 -m http.server 8000
+```
+
+Then open your browser and navigate to `http://localhost:8000/`.
