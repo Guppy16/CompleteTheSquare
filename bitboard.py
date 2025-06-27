@@ -1,3 +1,5 @@
+"""Attempt at a bitboard representation of the Square game"""
+
 from dataclasses import dataclass
 from itertools import product
 
