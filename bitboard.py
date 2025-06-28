@@ -1,7 +1,7 @@
 """Bitboard implementation for CompleteTheSquare game."""
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import product
 
 DIRECTIONS = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
@@ -14,17 +14,29 @@ class GameConfig:
     cols: int = 5
 
 
-class BitboardGame:
-    def __init__(self, config: GameConfig, current_player: int = 0):
-        self.config = config
-        self.boards: list[int] = []
-        self.current_player = current_player
-        self.move_to_corner_masks = self._get_square_corner_bitmasks()
-        self.reset()
+@dataclass(frozen=True)
+class BitboardState:
+    boards: tuple[int, ...]  # Tuple of bitboards for each player
+    current_player: int
 
-    def reset(self):
-        """Reset the game state."""
-        self.boards = [0 for _ in range(self.config.players)]
+    def copy(self):
+        """Create a copy of the current state."""
+        return BitboardState(self.boards, self.current_player)
+
+    @staticmethod
+    def default(players: int = 2) -> "BitboardState":
+        """Return a default state with all boards empty and player 0."""
+        return BitboardState(boards=tuple(0 for _ in range(players)), current_player=0)
+
+
+class BitboardGame:
+    def __init__(
+        self,
+        config: GameConfig,
+    ):
+        self.config = config
+        self.move_to_corner_masks = self._get_square_corner_bitmasks()
+        self.state = BitboardState.default(config.players)
 
     def square_to_bitboard(self, square: tuple) -> int:
         """Convert a square's position to a bitboard representation."""
@@ -41,7 +53,7 @@ class BitboardGame:
                 out += f"\n{row}|"
             position = self.square_to_bitboard((row, col))
             for player in range(self.config.players):
-                if self.boards[player] & position:
+                if self.state.boards[player] & position:
                     out += str(player)
                     break
             else:
@@ -51,18 +63,28 @@ class BitboardGame:
     def is_valid_move(self, move_bitboard: int):
         """Check if a move is valid."""
         return all(
-            self.boards[player] & move_bitboard == 0
+            self.state.boards[player] & move_bitboard == 0
             for player in range(self.config.players)
         )
 
-    def play_move(self, move: tuple, player: int):
+    def play_move(self, move: tuple):
         """Play a move for a player."""
         move_bitboard = self.square_to_bitboard(move)
         assert self.is_valid_move(move_bitboard)
-        self.boards[player] |= move_bitboard
 
-        self.remove_pieces(move, player)
+        player = self.state.current_player
+        boards = list(self.state.boards)
+
+        boards[player] = self.state.boards[player] | move_bitboard
+
+        boards = self.remove_pieces(move, boards, player)
+
         winner = self.get_winner(move_bitboard, player)
+
+        next_player = (player + 1) % self.config.players if not winner else player
+        self.state = replace(
+            self.state, boards=tuple(boards), current_player=next_player
+        )
 
         return winner
 
@@ -115,11 +137,11 @@ class BitboardGame:
         """Determine the winner of the game."""
 
         return any(
-            (self.boards[player] & mask) == mask
+            (self.state.boards[player] & mask) == mask
             for mask in self.move_to_corner_masks[move_bitboard]
         )
 
-    def remove_pieces(self, move, player):
+    def remove_pieces(self, move: tuple, boards: list[int], player: int):
         """Efficiently remove captured opponent pieces in all directions."""
         row, col = move
         rows, cols = self.config.rows, self.config.cols
@@ -130,32 +152,36 @@ class BitboardGame:
                 r, c = row + dr, col + dc
                 while 0 <= r < rows and 0 <= c < cols:
                     bit = self.square_to_bitboard((r, c))
-                    if self.boards[opponent] & bit:
+                    if self.state.boards[opponent] & bit:
                         captured_mask |= bit
-                    elif self.boards[player] & bit:
+                    elif self.state.boards[player] & bit:
                         # Capture! Remove all at once
-                        self.boards[opponent] &= ~captured_mask
+                        # print(f"Player {player} captures pieces on move {row},{col}")
+                        boards[opponent] &= ~captured_mask
                         break
                     else:
                         break
                     r += dr
                     c += dc
 
+        return boards
+
     def play(self):
         """Play a simple game loop."""
         while True:
             print(self.show())
-            move = input(f"Player {self.current_player}, enter your move (row,col): ")
+            move = input(
+                f"Player {self.state.current_player}, enter your move (row,col): "
+            )
             if move.lower() == "exit":
                 break
             try:
                 row, col = map(int, move.split(","))
-                winner = self.play_move((row, col), self.current_player)
+                winner = self.play_move((row, col))
                 if winner:
-                    print(f"Player {self.current_player} wins!")
+                    print(f"Player {self.state.current_player} wins!")
                     print(self.show())
                     break
-                self.current_player = (self.current_player + 1) % self.config.players
             except (ValueError, AssertionError):
                 print("Invalid move. Try again.")
 
@@ -170,11 +196,10 @@ def test_simple_game():
     # Simulate a few moves
     moves = [(0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (2, 1), (2, 2)]
     for i, move in enumerate(moves):
-        player = i % config.players
-        winner = game.play_move(move, player)
+        winner = game.play_move(move)
         print(game.show())
         if winner:
-            print(f"Player {player} wins!")
+            print(f"Player {game.state.current_player} wins!")
             break
 
 
