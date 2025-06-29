@@ -1,5 +1,35 @@
 const BOARD_SIZE = 5; // Configurable board size
 
+function getBitboardsFromGame(game) {
+  // Returns [playerW_bitboard, playerB_bitboard]
+  let w = 0, b = 0;
+  for (let r = 1; r <= BOARD_SIZE; r++) {
+    for (let c = 1; c <= BOARD_SIZE; c++) {
+      const pos = `${r}${c}`;
+      const bit = 1 << ((r - 1) * BOARD_SIZE + (c - 1));
+      if (game.p1.pieces.has(pos)) w |= bit;
+      if (game.p2.pieces.has(pos)) b |= bit;
+    }
+  }
+  return [w, b];
+}
+
+async function getAIMove(game) {
+  console.log("Requesting AI move...");
+
+  // Determine current player: 0 for W, 1 for B
+  const current_player = game.current.colour === 'W' ? 0 : 1;
+  const boards = getBitboardsFromGame(game);
+
+  const response = await fetch('http://localhost:5000/ai-move', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ boards, current_player })
+  });
+  const data = await response.json();
+  return data.move; // [row, col]
+}
+
 class Player {
   constructor(name, colour) {
     this.name = name;
@@ -181,6 +211,23 @@ document.documentElement.style.setProperty('--board-size', BOARD_SIZE);
 
 let game = new Game(new Player("You", "W"), new Player("AI", "B"));
 
+let playAgainstAI = false; // Default: human vs human
+
+const aiToggle = document.getElementById('ai-toggle');
+const toggleLabel = document.getElementById('toggle-label');
+
+aiToggle.addEventListener('change', () => {
+  playAgainstAI = aiToggle.checked;
+  if (playAgainstAI) {
+    toggleLabel.textContent = "Play vs AI";
+    game = new Game(new Player("You", "W"), new Player("AI", "B"));
+  } else {
+    toggleLabel.textContent = "Play vs Human";
+    game = new Game(new Player("You", "W"), new Player("Opponent", "B"));
+  }
+  setupBoard();
+});
+
 // Add this helper function to convert W/B to actual color names
 function getColorName(colorCode) {
   return colorCode === 'W' ? 'Green' : 'Red';
@@ -215,6 +262,7 @@ function setupBoard() {
       cell.classList.add('cell');
       cell.dataset.pos = `${r}${c}`;
       cell.addEventListener('click', () => {
+        console.log(`Clicked cell at position: ${cell.dataset.pos}`);
         const pos = cell.dataset.pos;
         if (!game.valid(pos)) return; // Skip invalid moves
 
@@ -229,7 +277,7 @@ function setupBoard() {
         
         // Update status message with colored text
         statusEl.innerHTML = createColoredStatus(game.current.colour);
-        
+
         if (finished) {
           // Highlight winning square
           game.winningSquare.forEach(cornerPos => {
@@ -252,11 +300,24 @@ function setupBoard() {
           });
           resetButtonContainer.appendChild(resetButton);
         }
+
+        // Only trigger AI if playing vs AI and it's AI's turn
+        console.log(`Current player: ${game.current.name}`);
+        if (playAgainstAI && game.current.name === "AI" && !finished) {
+          getAIMove(game)
+            .then(([row, col]) => {
+              const aiPos = `${row + 1}${col + 1}`; // Bitboard is 0-indexed, JS is 1-indexed
+              const aiCell = document.querySelector(`.cell[data-pos="${aiPos}"]`);
+              if (aiCell && !aiCell.classList.contains('disabled')) {
+                aiCell.click();
+              }
+            });
+        }
       });
       boardEl.appendChild(cell);
     }
   }
 }
 
-// Initialize the board
+// Initialize the board with default mode
 setupBoard();
