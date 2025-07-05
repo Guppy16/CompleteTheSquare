@@ -7,7 +7,10 @@ from minimax import find_best_move
 app = Flask(__name__)
 CORS(
     app,
-    origins=["https://guppy16.github.io/CompleteTheSquare/", "http://localhost:3000"],
+    origins=[
+        "https://guppy16.github.io/CompleteTheSquare/",
+        "http://localhost:3000",
+    ],
 )
 
 # Set up your game config
