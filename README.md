@@ -10,7 +10,7 @@ Adapted from: https://github.com/VatsalRaina/CompleteTheSquare
 To develop the js game locally, you can use the following commands:
 
 ```bash
-python3 -m http.server 8000
+python3 -m http.server 3000
 ```
 
-Then open your browser and navigate to `http://localhost:8000/`.
+Then open your browser and navigate to `http://localhost:3000/`.
