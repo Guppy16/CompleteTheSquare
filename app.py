@@ -5,7 +5,10 @@ from bitboard import BitboardGame, BitboardState, GameConfig
 from minimax import find_best_move
 
 app = Flask(__name__)
-CORS(app)
+CORS(
+    app,
+    origins=["https://guppy16.github.io/CompleteTheSquare/", "http://localhost:3000"],
+)
 
 # Set up your game config
 config = GameConfig(players=2, rows=5, cols=5)
