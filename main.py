@@ -38,6 +38,16 @@ def index():
     return jsonify({"message": "Welcome to the Bitboard Game API!"})
 
 
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "healthy"}), 200
+
+
+# For production WSGI servers
+application = app
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    debug = os.environ.get("FLASK_ENV") == "development"
+    print(f"Starting Flask app on 0.0.0.0:{port}")
+    app.run(host="0.0.0.0", port=port, debug=debug)
