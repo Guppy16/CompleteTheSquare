@@ -32,10 +32,12 @@ def ai_move():
     best_move = find_best_move(game, state, depth=3)
     return jsonify({"move": best_move})
 
+
 @app.route("/", methods=["GET"])
 def index():
     return jsonify({"message": "Welcome to the Bitboard Game API!"})
 
+
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 8080))
     app.run(port=port, debug=True)
