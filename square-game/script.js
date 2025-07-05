@@ -1,5 +1,8 @@
 const BOARD_SIZE = 5; // Configurable board size
 
+const url = 'https://completethesquare-32441666402.europe-west1.run.app'
+// const url = 'http://localhost:5000'
+
 function getBitboardsFromGame(game) {
   // Returns [playerW_bitboard, playerB_bitboard]
   let w = 0, b = 0;
@@ -21,7 +24,7 @@ async function getAIMove(game) {
   const current_player = game.current.colour === 'W' ? 0 : 1;
   const boards = getBitboardsFromGame(game);
 
-  const response = await fetch('http://localhost:5000/ai-move', {
+  const response = await fetch(`${url}/ai-move`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ boards, current_player })
