@@ -1,3 +1,5 @@
+import os
+
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
@@ -10,6 +12,7 @@ CORS(
     origins=[
         "https://guppy16.github.io/CompleteTheSquare/",
         "http://localhost:3000",
+        "http://0.0.0.0:3000",
     ],
 )
 
@@ -31,4 +34,5 @@ def ai_move():
 
 
 if __name__ == "__main__":
-    app.run(port=5000, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(port=port, debug=True)
