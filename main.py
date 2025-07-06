@@ -10,10 +10,12 @@ app = Flask(__name__)
 CORS(
     app,
     origins=[
-        "https://guppy16.github.io/CompleteTheSquare/",
+        "https://guppy16.github.io",
         "http://localhost:3000",
         "http://0.0.0.0:3000",
     ],
+    methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
 )
 
 # Set up your game config
