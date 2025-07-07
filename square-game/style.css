@@ -55,51 +55,96 @@ button:hover {
 
 #mode-select {
   margin-bottom: 16px;
-}
-#mode-select button.selected {
-  background: #2196F3;
-  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.switch {
+.play-label {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.modern-switch {
   position: relative;
   display: inline-block;
-  width: 50px;
-  height: 28px;
-  vertical-align: middle;
-  margin-right: 10px;
+  width: 200px;
+  height: 40px;
 }
-.switch input {
+
+.modern-switch input {
   opacity: 0;
   width: 0;
   height: 0;
 }
-.slider {
+
+.switch-slider {
   position: absolute;
   cursor: pointer;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background-color: #ccc;
-  transition: .4s;
-  border-radius: 28px;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #e0e0e0;
+  border-radius: 20px;
+  transition: 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px;
 }
-.slider:before {
+
+.switch-option {
+  position: relative;
+  z-index: 1;
+  width: 50%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
+  transition: all 0.3s ease;
+  border-radius: 18px;
+}
+
+.switch-option.active {
+  color: #fff;
+  font-weight: 600;
+  transform: scale(1.05);
+}
+
+.switch-option::before {
+  content: attr(data-text);
+}
+
+.switch-button {
   position: absolute;
-  content: "";
-  height: 22px;
-  width: 22px;
-  left: 3px;
-  bottom: 3px;
-  background-color: white;
-  transition: .4s;
-  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  width: calc(50% - 2px);
+  height: calc(100% - 4px);
+  background-color: #4CAF50;
+  border-radius: 18px;
+  transition: 0.3s;
+  z-index: 0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
-input:checked + .slider {
+
+input:checked + .switch-slider .switch-button {
+  transform: translateX(calc(100% + 2px));
   background-color: #2196F3;
 }
-input:checked + .slider:before {
-  transform: translateX(22px);
+
+input:checked + .switch-slider .switch-option.left {
+  color: #666;
+  font-weight: 500;
+  transform: scale(1);
 }
-#toggle-label {
-  font-size: 16px;
-  vertical-align: middle;
+
+input:checked + .switch-slider .switch-option.right {
+  color: #fff;
+  font-weight: 600;
+  transform: scale(1.05);
 }

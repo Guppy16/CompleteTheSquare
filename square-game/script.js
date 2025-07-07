@@ -217,15 +217,20 @@ let game = new Game(new Player("You", "W"), new Player("AI", "B"));
 let playAgainstAI = false; // Default: human vs human
 
 const aiToggle = document.getElementById('ai-toggle');
-const toggleLabel = document.getElementById('toggle-label');
+const leftOption = document.querySelector('.switch-option.left');
+const rightOption = document.querySelector('.switch-option.right');
 
 aiToggle.addEventListener('change', () => {
   playAgainstAI = aiToggle.checked;
+  
+  // Update the visual state of the toggle
   if (playAgainstAI) {
-    toggleLabel.textContent = "Play vs AI";
+    leftOption.classList.remove('active');
+    rightOption.classList.add('active');
     game = new Game(new Player("You", "W"), new Player("AI", "B"));
   } else {
-    toggleLabel.textContent = "Play vs Human";
+    leftOption.classList.add('active');
+    rightOption.classList.remove('active');
     game = new Game(new Player("You", "W"), new Player("Opponent", "B"));
   }
   setupBoard();

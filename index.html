@@ -9,11 +9,14 @@
 <body>
   <h1>Complete the Square Game</h1>
   <div id="mode-select">
-    <label class="switch">
+    <label class="modern-switch">
       <input type="checkbox" id="ai-toggle">
-      <span class="slider"></span>
+      <span class="switch-slider">
+        <span class="switch-option left active" data-text="Over the Board"></span>
+        <span class="switch-option right" data-text="Against AI"></span>
+        <span class="switch-button"></span>
+      </span>
     </label>
-    <span id="toggle-label">Play vs Human</span>
   </div>
   <div id="board"></div>
   <p id="status"><span style="background-color: #4CAF5050; padding: 2px 8px; border-radius: 4px; text-shadow: 0 0 3px #4CAF5080;">Green</span> to move</p>
