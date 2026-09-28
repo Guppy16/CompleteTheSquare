@@ -1,0 +1,148 @@
+//! Evaluation and negamax alpha-beta search. A direct port of `minimax.py`.
+
+use crate::game::{bit_index, index_to_square, play_move, tables, Bit, State, Tables, COLS, N, ROWS};
+use std::sync::OnceLock;
+
+pub const WIN_SCORE: f64 = 1.0;
+pub const WIN_DEPTH_BONUS: f64 = 0.01;
+pub const W_MATERIAL: f64 = 0.25;
+pub const W_POSITION: f64 = 0.10;
+pub const W_THREATS: f64 = 0.15;
+pub const MAX_THREATS: i32 = 3;
+
+pub struct Evaluator {
+    corner_mask: u32,
+    edge_mask: u32,
+    position_norm: f64,
+    material_norm: f64,
+    /// Corner-first move ordering (also the tie-break between equal moves).
+    pub move_order: Vec<Bit>,
+}
+
+pub fn evaluator() -> &'static Evaluator {
+    static EVALUATOR: OnceLock<Evaluator> = OnceLock::new();
+    EVALUATOR.get_or_init(Evaluator::new)
+}
+
+impl Evaluator {
+    fn new() -> Self {
+        let (mut corner_mask, mut edge_mask) = (0u32, 0u32);
+        for i in 0..N {
+            let (r, c) = index_to_square(i);
+            let on_row_edge = r == 0 || r == ROWS - 1;
+            let on_col_edge = c == 0 || c == COLS - 1;
+            if on_row_edge && on_col_edge {
+                corner_mask |= 1 << i;
+            } else if on_row_edge || on_col_edge {
+                edge_mask |= 1 << i;
+            }
+        }
+        let corner_distance = |i: usize| {
+            let (r, c) = index_to_square(i);
+            r.min(ROWS - 1 - r) + c.min(COLS - 1 - c)
+        };
+        let mut order: Vec<usize> = (0..N).collect();
+        order.sort_by_key(|&i| corner_distance(i)); // stable, like Python's sorted
+        Evaluator {
+            corner_mask,
+            edge_mask,
+            position_norm: (2 * corner_mask.count_ones() + edge_mask.count_ones()) as f64,
+            material_norm: N as f64,
+            move_order: order.into_iter().map(|i| 1 << i).collect(),
+        }
+    }
+
+    fn threat_difference(&self, t: &Tables, mine: u32, theirs: u32) -> i32 {
+        let mut diff = 0;
+        for &mask in &t.all_corner_masks {
+            let (m, th) = (mine & mask, theirs & mask);
+            if th == 0 {
+                if m.count_ones() == 3 {
+                    diff += 1;
+                }
+            } else if m == 0 && th.count_ones() == 3 {
+                diff -= 1;
+            }
+        }
+        diff
+    }
+
+    /// Heuristic score of `state` for the player about to move.
+    pub fn evaluate(&self, t: &Tables, state: &State) -> f64 {
+        let mine = state.boards[state.current];
+        let theirs = state.boards[1 - state.current];
+
+        let material = (mine.count_ones() as i32 - theirs.count_ones() as i32) as f64 / self.material_norm;
+        let positional = |b: u32| (2 * (b & self.corner_mask).count_ones() + (b & self.edge_mask).count_ones()) as i32;
+        let position = (positional(mine) - positional(theirs)) as f64 / self.position_norm;
+        let threat_diff = self.threat_difference(t, mine, theirs).clamp(-MAX_THREATS, MAX_THREATS);
+        let threats = threat_diff as f64 / MAX_THREATS as f64;
+
+        W_MATERIAL * material + W_POSITION * position + W_THREATS * threats
+    }
+}
+
+/// Legal move bits: the killer first, then corner-out order.
+fn ordered_moves<'a>(ev: &'a Evaluator, empty: u32, killer: Bit) -> impl Iterator<Item = Bit> + 'a {
+    let first = if killer & empty != 0 { Some(killer) } else { None };
+    first.into_iter().chain(ev.move_order.iter().copied().filter(move |&b| b & empty != 0 && b != killer))
+}
+
+pub fn negamax(t: &Tables, ev: &Evaluator, state: &State, depth: u32, mut alpha: f64, beta: f64, killers: &mut [Bit]) -> f64 {
+    if depth == 0 {
+        return ev.evaluate(t, state);
+    }
+    let empty = state.empty();
+    if empty == 0 {
+        return 0.0;
+    }
+    let mut best = f64::NEG_INFINITY;
+    let moves: Vec<Bit> = ordered_moves(ev, empty, killers[depth as usize]).collect();
+    for bit in moves {
+        let (child, won) = play_move(t, bit, state);
+        if won.is_some() {
+            return WIN_SCORE + WIN_DEPTH_BONUS * depth as f64;
+        }
+        let score = -negamax(t, ev, &child, depth - 1, -beta, -alpha, killers);
+        if score > best {
+            best = score;
+        }
+        if best > alpha {
+            alpha = best;
+        }
+        if alpha >= beta {
+            killers[depth as usize] = bit;
+            break;
+        }
+    }
+    best
+}
+
+/// The move bit the player to move should play, or None if the board is full.
+pub fn best_move(state: &State, depth: u32) -> Option<Bit> {
+    let (t, ev) = (tables(), evaluator());
+    let empty = state.empty();
+    let mut best_bit = None;
+    let mut best_score = f64::NEG_INFINITY;
+    let (mut alpha, beta) = (f64::NEG_INFINITY, f64::INFINITY);
+    let mut killers = vec![0; depth as usize + 1];
+
+    let moves: Vec<Bit> = ordered_moves(ev, empty, 0).collect();
+    for bit in moves {
+        let (child, won) = play_move(t, bit, state);
+        if won.is_some() {
+            return Some(bit);
+        }
+        let score = -negamax(t, ev, &child, depth - 1, -beta, -alpha, &mut killers);
+        if score > best_score {
+            best_score = score;
+            best_bit = Some(bit);
+        }
+        alpha = alpha.max(best_score);
+    }
+    best_bit
+}
+
+pub fn best_move_index(state: &State, depth: u32) -> Option<usize> {
+    best_move(state, depth).map(bit_index)
+}
