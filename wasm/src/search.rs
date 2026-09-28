@@ -190,6 +190,10 @@ pub struct Search<'a> {
     tt: Option<&'a mut TranspositionTable>,
     /// Nodes visited so far (for the node budget).
     pub nodes: u64,
+    /// Stop once this many nodes have been visited (u64::MAX = never).
+    pub node_budget: u64,
+    /// Set when the budget ran out mid-search; results after that are garbage.
+    pub aborted: bool,
 }
 
 impl<'a> Search<'a> {
@@ -207,6 +211,8 @@ impl<'a> Search<'a> {
             killers: vec![0; depth as usize + 1],
             tt,
             nodes: 0,
+            node_budget: u64::MAX,
+            aborted: false,
         }
     }
 
@@ -292,6 +298,12 @@ pub fn quiescence(s: &mut Search, state: &State, mut alpha: f64, beta: f64, qdep
 
 pub fn negamax(s: &mut Search, state: &State, depth: u32, mut alpha: f64, mut beta: f64) -> f64 {
     s.nodes += 1;
+    if s.nodes >= s.node_budget {
+        s.aborted = true; // out of budget: unwind; the caller discards this iteration
+    }
+    if s.aborted {
+        return 0.0;
+    }
     let key = state.key();
     // A position we have already been through can only lead to a draw by
     // repetition, whatever the evaluation says about it.
@@ -349,7 +361,9 @@ pub fn negamax(s: &mut Search, state: &State, depth: u32, mut alpha: f64, mut be
     s.path.pop();
 
     let bound = if best >= beta { Bound::Lower } else if best <= alpha_in { Bound::Upper } else { Bound::Exact };
-    s.tt_put(TtEntry { key, depth, score: best, bound, best: best_bit });
+    if !s.aborted {
+        s.tt_put(TtEntry { key, depth, score: best, bound, best: best_bit });
+    }
     best
 }
 
@@ -443,7 +457,13 @@ pub fn search_depth_reached(
     let mut reached = 0;
     for depth in 1..=max_depth.max(1) {
         let first = best.map_or(0, |(b, _)| b);
-        best = search_root(&mut s, state, depth, first);
+        // Depth 1 always completes, so there is always an answer.
+        s.node_budget = if depth == 1 { u64::MAX } else { node_budget };
+        let result = search_root(&mut s, state, depth, first);
+        if s.aborted {
+            break; // budget ran out mid-iteration: keep the previous iteration's move
+        }
+        best = result;
         reached = depth;
         match best {
             None => return (None, reached, s.nodes),               // no legal moves

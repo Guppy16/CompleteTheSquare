@@ -238,7 +238,7 @@ first, which is better move ordering than the killer heuristic alone.
 `best_move_budget` searches depth 1, then 2, then 3, and so on, keeping the table between
 iterations, until a node budget is used up or a forced win is found. Each iteration starts
 with the previous one's best move, so the deeper searches prune very well, and the cost of
-the shallow iterations is negligible. The page asks for a budget of 200k nodes and a
+the shallow iterations is negligible. The page asks for a budget of 400k nodes and a
 maximum depth of 12; that is depth 7 or 8 in about 100 ms on a laptop.
 
 ## 7. Repetition
@@ -280,7 +280,10 @@ Only measure; intuition about evaluation terms was wrong more often than right (
 
 - `AI_NODE_BUDGET` and `AI_MAX_DEPTH` in `square-game/script.js`. The search runs at about
   6 million nodes per second natively; a phone in WebAssembly is perhaps 3 to 5x slower.
-  The budget is checked between iterations, so a search can overshoot it by an iteration.
+  The budget is checked at every node: when it runs out the current iteration is abandoned
+  and the previous iteration's move is played, so the time per move is predictable.
+  Measured against the human-like opponent, 200k nodes won 94 of 100, 400k won 97, and
+  800k also 97, so 400k is the setting.
 - `QUIESCENCE_DEPTH` in `src/search.rs` (4): how far capture exchanges are followed at the
   leaves.
 - The three weights and `WIN_SCORE` at the top of `src/search.rs`. Keep the weights

@@ -5,10 +5,10 @@
 
 const BOARD_SIZE = 5;
 // The AI searches deeper and deeper until it has visited AI_NODE_BUDGET
-// positions (about 100 ms on a laptop, well under a second on a phone) or
+// positions (about 70 ms on a laptop, a few hundred ms on a phone) or
 // reached AI_MAX_DEPTH plies.
 const AI_MAX_DEPTH = 12;
-const AI_NODE_BUDGET = 200000;
+const AI_NODE_BUDGET = 400000;
 const WASM_URL = 'square-game/ai.wasm';
 const WORKER_URL = 'square-game/worker.js';
 const COLOURS = ['W', 'B'];            // player 0 is green (W), player 1 is red (B)
