@@ -134,7 +134,7 @@ button[hidden] {
 
 #move-list {
   width: min(100%, var(--board-max));
-  max-height: 6.5em;
+  max-height: 9em;
   overflow-y: auto;
   margin-top: 12px;
   padding: 6px 8px;
@@ -148,46 +148,30 @@ button[hidden] {
 }
 
 #move-list .pair {
-  display: inline-block;
-  margin-right: 0.9em;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 12px 2px 0;
   white-space: nowrap;
 }
 
-#move-list .move {
-  cursor: pointer;
-  padding: 0 2px;
-  border-radius: 3px;
+/* Tiny picture of the position after each pair of moves. */
+.mini-board {
+  --mini-cell: 4px;
+  display: inline-grid;
+  grid-template-columns: repeat(var(--board-size), var(--mini-cell));
+  gap: 1px;
+  vertical-align: middle;
 }
 
-#move-list .move.selected {
+.mini-board span {
+  width: var(--mini-cell);
+  height: var(--mini-cell);
   background: #ddd;
 }
 
-/* Tiny board under the move list: shows the position after the selected move. */
-#mini {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 8px;
-  font-size: 0.8rem;
-  color: #666;
-}
-
-#mini-board {
-  --mini-cell: 6px;
-  display: grid;
-  grid-template-columns: repeat(var(--board-size), var(--mini-cell));
-  gap: 1px;
-}
-
-#mini-board div {
-  width: var(--mini-cell);
-  height: var(--mini-cell);
-  background: #e0e0e0;
-}
-
-#mini-board .player-W { background: #4CAF50; }
-#mini-board .player-B { background: #F44336; }
+.mini-board .player-W { background: #4CAF50; }
+.mini-board .player-B { background: #F44336; }
 
 #status {
   font-size: 18px;
