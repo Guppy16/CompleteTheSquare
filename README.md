@@ -7,21 +7,25 @@ Adapted from: https://github.com/VatsalRaina/CompleteTheSquare
 
 ### Development
 
-To develop the js game locally, you can use the following commands:
+The page is static: `index.html` plus `square-game/`. Serve it locally with
 
 ```bash
 python3 -m http.server 3000
 ```
 
-Then open your browser and navigate to `http://localhost:3000/`.
+and open `http://localhost:3000/`.
 
-### AI backend
+### The AI
 
-`main.py` is a Flask app that returns the AI's move (`bitboard.py` is the rules engine,
-`minimax.py` the search). How it works, including alpha-beta pruning and the bitboard
-tricks, is explained in [docs/ai-search.md](docs/ai-search.md).
+The rules and the AI are a Rust crate in `wasm/`, compiled to WebAssembly and loaded by
+`square-game/script.js`. How it works (bitboards, alpha-beta pruning, evaluation) is
+explained in [docs/ai-search.md](docs/ai-search.md).
 
 ```bash
-python3 test_ai.py   # regression tests
-python3 minimax.py   # play against the AI in the terminal
+rustup target add wasm32-unknown-unknown   # once
+cd wasm
+cargo test --release                       # regression tests
+./build.sh                                 # rebuild square-game/ai.wasm
 ```
+
+The compiled `ai.wasm` is committed, so the site needs no build step to deploy.

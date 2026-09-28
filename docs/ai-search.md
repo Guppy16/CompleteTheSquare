@@ -1,9 +1,13 @@
 # How the AI works
 
-The AI lives in two files:
+The AI is a Rust crate in `wasm/`, compiled to WebAssembly and run in the browser:
 
-- `bitboard.py` is the rules engine: board representation, legal moves, captures, win detection.
-- `minimax.py` is the search: evaluation function, negamax with alpha-beta pruning, killer moves.
+- `src/game.rs` is the rules engine: board representation, legal moves, captures, win detection.
+- `src/search.rs` is the search: evaluation function, negamax with alpha-beta pruning, killer moves.
+- `src/lib.rs` holds the game state and exposes it to the page (section 8).
+
+It started life as Python (`bitboard.py` / `minimax.py`, see the git history), and the
+Rust is a line-for-line port, so the snippets below use whichever reads more clearly.
 
 This document walks through each piece, roughly in the order the ideas build on each other.
 
@@ -37,9 +41,9 @@ is a negative number with infinitely many leading ones; masking keeps only the 2
 
 ## 2. Bit-level move generation
 
-The old `legal_moves` looped over all 25 `(row, col)` pairs, built a bit for each one,
-and tested it against the occupied mask. The new version asks for the empty mask once
-and then walks its set bits:
+The original `legal_moves` looped over all 25 `(row, col)` pairs, built a bit for each one,
+and tested it against the occupied mask. The search now asks for the empty mask once and
+walks its set bits (in Rust this is `trailing_zeros` plus clearing the bit; in Python it was):
 
 ```python
 def iter_bits(mask):
@@ -55,18 +59,18 @@ adds one, which leaves only the lowest set bit in common with the original. So f
 when the mask hits zero. Each iteration costs a couple of integer ops instead of a
 coordinate round trip, and an empty board with 20 free squares does 20 iterations, not 25.
 
-The search never converts bits back to coordinates. It plays moves with
-`play_move_bit(bit, state)`; only `find_best_move` translates the final answer back to
-`(row, col)` via the precomputed `index_to_square` table.
+The search never converts bits back to coordinates. It plays moves as bits; only the
+final answer is translated back to a square index (`best_move_index`), and the page turns
+that into a grid cell.
 
 ## 3. Captures with precomputed rays
 
 A capture is: starting from the square just played, walk in one of 8 directions over a run
 of opponent pieces, and if the run ends at one of our own pieces, remove the run.
 
-The old code recomputed the walk from coordinates on every move, with bounds checks and
-an `assert` per visited square. Now `_get_capture_rays` runs once at start-up and stores,
-for every square, the list of bits along each of the 8 rays:
+The original code recomputed the walk from coordinates on every move, with bounds checks
+per visited square. Now `build_tables` runs once at start-up and stores, for every square,
+the list of bits along each of the 8 rays:
 
 ```
 square (2,2), direction "up-right":  [bit(1,3), bit(0,4)]
@@ -76,8 +80,8 @@ square (0,0), direction "right":     [bit(0,1), bit(0,2), bit(0,3), bit(0,4)]
 ```
 
 Rays shorter than two squares are dropped at build time because a capture needs at least
-one opponent piece plus one of ours beyond it. At play time `remove_pieces_bit` just
-walks the stored bits:
+one opponent piece plus one of ours beyond it. At play time `remove_pieces` just walks
+the stored bits:
 
 ```python
 for ray in capture_rays[move_bit]:
@@ -88,9 +92,9 @@ for ray in capture_rays[move_bit]:
         else:            break                  # empty: no capture here
 ```
 
-Win detection was already bit based: `move_to_corner_masks[bit]` lists every square
-(2x2 up to 5x5) that has the played square as a corner, and a win is any mask fully
-contained in the player's board.
+Win detection was already bit based: `corner_masks[square]` lists every square (2x2 up
+to 5x5) that has the played square as a corner, and a win is any mask fully contained in
+the player's board.
 
 ## 4. Evaluation
 
@@ -183,7 +187,7 @@ alpha = max(alpha, best)
 if alpha >= beta: break      # cut-off
 ```
 
-`test_alpha_beta_matches_plain_minimax` in `test_ai.py` checks on random positions that
+`alpha_beta_matches_plain_minimax` in `wasm/tests/ai.rs` checks on random positions that
 the pruned search returns exactly the same value as the unpruned one.
 
 ### Move ordering matters
@@ -211,17 +215,29 @@ Measured on the opening position (AI replying to a centre move), depth 5:
 
 ## 7. Tuning knobs
 
-- `SEARCH_DEPTH` in `main.py` (currently 5). Each extra ply costs roughly 5-10x on the
-  opening board and much less mid-game.
-- The three weights and `HEURISTIC_CAP` at the top of `minimax.py`. Keep the weights
-  summing to at most the cap so wins always dominate.
-- `Evaluator.move_order` if you want to experiment with other static orderings.
+- `AI_DEPTH` in `square-game/script.js` (currently 7). Native timings for the AI's first
+  reply: depth 7 about 100 ms, depth 8 about 400 ms, depth 9 about 3 s. Expect a phone to
+  be 2-4x slower than that.
+- The three weights and `WIN_SCORE` at the top of `src/search.rs`. Keep the weights
+  summing to less than `WIN_SCORE` so wins always dominate.
+- `Evaluator::move_order` if you want to experiment with other static orderings.
 
-## 8. Notes for a WebAssembly port
+## 8. The WebAssembly build
 
-GitHub Pages serves `.wasm` files as static assets, so nothing about hosting stands in the
-way. Everything in `bitboard.py` and `minimax.py` is integer arithmetic on 25-bit values,
-which maps directly onto `uint32` in Rust, C or AssemblyScript; the only Python-specific
-bits are `int.bit_count()` (use `popcount`) and the unbounded `~` (mask with `full_mask`,
-as the Python already does). The precomputed tables (`capture_rays`, `move_to_corner_masks`,
-`all_corner_masks`, `move_order`) can be generated at start-up the same way.
+`src/lib.rs` keeps one game in a thread-local `Session` and exports plain-integer
+functions, so the page needs no glue library:
+
+| export            | meaning                                                            |
+|-------------------|--------------------------------------------------------------------|
+| `reset()`         | new game, player 0 to move                                         |
+| `board(p)`        | bitboard of player `p`'s pieces                                    |
+| `current_player()`| 0 or 1                                                             |
+| `winner()`        | winner's index, or -1 while the game runs                          |
+| `winning_mask()`  | corner mask of the completed square, for highlighting              |
+| `play(row, col)`  | 1 if the move was applied, 0 if illegal or the game is over        |
+| `ai_play(depth)`  | choose and play a move for the side to move; returns its square index |
+
+`square-game/script.js` fetches `ai.wasm`, calls `WebAssembly.instantiate`, and from then
+on only forwards clicks to `play`, calls `ai_play` on the AI's turn, and redraws the grid
+from `board(0)` and `board(1)`. `wasm/build.sh` rebuilds the module; the compiled file is
+committed so GitHub Pages can serve it with no build step.
