@@ -1,5 +1,6 @@
 //! WebAssembly entry points. The module owns the whole game state; the page
-//! only calls `play` / `ai_play` and redraws from `board(0)`, `board(1)`.
+//! only calls `play` / `ai_play` / `undo` / `redo` and redraws from
+//! `board(0)`, `board(1)`.
 //!
 //! Every export takes and returns plain integers, so no JS glue is needed
 //! beyond `WebAssembly.instantiate`.
@@ -13,25 +14,57 @@ use std::cell::RefCell;
 /// A position occurring this many times ends the game as a draw (as in chess).
 pub const REPETITION_LIMIT: usize = 3;
 
-struct Session {
+/// One move of the game, with the position it led to.
+#[derive(Clone, Copy)]
+struct Ply {
+    /// Position after the move.
     state: State,
-    /// Player index of the winner, or -1 while the game is running.
-    winner: i32,
-    /// Corner mask of the winning square, for highlighting.
-    winning_mask: u32,
-    /// True once the game has ended by threefold repetition.
-    draw: bool,
-    /// Keys of every position so far, the current one last.
-    history: Vec<u64>,
+    /// The square played.
+    move_bit: u32,
+    /// Corner mask of the completed square if the move won.
+    won: Option<u32>,
+}
+
+/// The game is the list of plies played from the initial position; the
+/// winner, the draw and the repetition history are all derived from it.
+struct Session {
+    plies: Vec<Ply>,
+    /// Moves taken back, the most recently undone last.
+    redo: Vec<Ply>,
 }
 
 impl Session {
     fn new() -> Self {
-        let state = State::new();
-        Session { state, winner: -1, winning_mask: 0, draw: false, history: vec![state.key()] }
+        Session { plies: Vec::new(), redo: Vec::new() }
+    }
+    fn state(&self) -> State {
+        self.plies.last().map_or(State::new(), |p| p.state)
+    }
+    /// The last ply, if it won the game.
+    fn winning_ply(&self) -> Option<&Ply> {
+        self.plies.last().filter(|p| p.won.is_some())
+    }
+    fn winner(&self) -> i32 {
+        // `play_move` keeps the winner as the side to move.
+        self.winning_ply().map_or(-1, |p| p.state.current as i32)
+    }
+    fn winning_mask(&self) -> u32 {
+        self.winning_ply().and_then(|p| p.won).unwrap_or(0)
+    }
+    /// Keys of every position so far, the initial one first and the current one last.
+    fn keys(&self) -> Vec<u64> {
+        std::iter::once(State::new().key()).chain(self.plies.iter().map(|p| p.state.key())).collect()
+    }
+    /// How many times the current position has occurred (1 = first time).
+    fn repetitions(&self) -> usize {
+        let key = self.state().key();
+        self.keys().into_iter().filter(|&k| k == key).count()
+    }
+    fn draw(&self) -> bool {
+        self.winner() < 0 && self.repetitions() >= REPETITION_LIMIT
     }
     fn over(&self) -> bool {
-        self.winner >= 0 || self.draw
+        self.winner() >= 0 || self.draw()
     }
 }
 
@@ -48,44 +81,40 @@ pub extern "C" fn reset() {
 /// Bitboard of `player`'s pieces (bit `row * 5 + col`).
 #[no_mangle]
 pub extern "C" fn board(player: u32) -> u32 {
-    SESSION.with(|s| s.borrow().state.boards.get(player as usize).copied().unwrap_or(0))
+    SESSION.with(|s| s.borrow().state().boards.get(player as usize).copied().unwrap_or(0))
 }
 
 #[no_mangle]
 pub extern "C" fn current_player() -> u32 {
-    SESSION.with(|s| s.borrow().state.current as u32)
+    SESSION.with(|s| s.borrow().state().current as u32)
 }
 
 /// Winner's player index, or -1 while the game is in progress.
 #[no_mangle]
 pub extern "C" fn winner() -> i32 {
-    SESSION.with(|s| s.borrow().winner)
+    SESSION.with(|s| s.borrow().winner())
 }
 
 /// Corner mask of the completed square once the game is won, else 0.
 #[no_mangle]
 pub extern "C" fn winning_mask() -> u32 {
-    SESSION.with(|s| s.borrow().winning_mask)
+    SESSION.with(|s| s.borrow().winning_mask())
 }
 
 /// 1 once the game has ended in a draw by threefold repetition, else 0.
 #[no_mangle]
 pub extern "C" fn draw() -> u32 {
-    SESSION.with(|s| s.borrow().draw as u32)
+    SESSION.with(|s| s.borrow().draw() as u32)
 }
 
 /// How many times the current position has occurred (1 = first time).
 #[no_mangle]
 pub extern "C" fn repetitions() -> u32 {
-    SESSION.with(|s| {
-        let s = s.borrow();
-        let key = s.state.key();
-        s.history.iter().filter(|&&k| k == key).count() as u32
-    })
+    SESSION.with(|s| s.borrow().repetitions() as u32)
 }
 
 /// Play (row, col) for the player to move. Returns 1 if applied, 0 if the
-/// square is off-board, occupied, or the game is over.
+/// square is off-board, occupied, or the game is over. Clears the redo stack.
 #[no_mangle]
 pub extern "C" fn play(row: u32, col: u32) -> u32 {
     if row as usize >= ROWS || col as usize >= COLS {
@@ -94,37 +123,81 @@ pub extern "C" fn play(row: u32, col: u32) -> u32 {
     play_bit(square_bit(row as usize, col as usize))
 }
 
-/// Let the AI choose and play a move for the player to move, searching
-/// `depth` plies. Returns the square index played, or -1 if none.
+/// Let the AI choose and play a move for the player to move. It searches
+/// deeper and deeper until `node_budget` positions have been visited or
+/// `max_depth` is reached. Returns the square index played, or -1 if none.
 #[no_mangle]
-pub extern "C" fn ai_play(depth: u32) -> i32 {
+pub extern "C" fn ai_play(max_depth: u32, node_budget: u32) -> i32 {
     let started = SESSION.with(|s| {
         let s = s.borrow();
-        (!s.over()).then(|| (s.state, s.history.clone()))
+        (!s.over()).then(|| (s.state(), s.keys()))
     });
     let Some((state, history)) = started else { return -1 };
-    match search::best_move(&state, depth.max(1), &history) {
+    match search::best_move_budget(&state, max_depth.max(1), node_budget as u64, &history) {
         Some(bit) if play_bit(bit) == 1 => bit.trailing_zeros() as i32,
         _ => -1,
     }
 }
 
+/// Take back the last move. Returns 1 if a move was undone, 0 if there was
+/// none. Undoing clears a win or draw.
+#[no_mangle]
+pub extern "C" fn undo() -> u32 {
+    SESSION.with(|s| {
+        let mut s = s.borrow_mut();
+        match s.plies.pop() {
+            Some(ply) => {
+                s.redo.push(ply);
+                1
+            }
+            None => 0,
+        }
+    })
+}
+
+/// Replay the most recently undone move. Returns 1 if one was replayed, else 0.
+#[no_mangle]
+pub extern "C" fn redo() -> u32 {
+    SESSION.with(|s| {
+        let mut s = s.borrow_mut();
+        match s.redo.pop() {
+            Some(ply) => {
+                s.plies.push(ply);
+                1
+            }
+            None => 0,
+        }
+    })
+}
+
+/// Number of moves played so far.
+#[no_mangle]
+pub extern "C" fn move_count() -> u32 {
+    SESSION.with(|s| s.borrow().plies.len() as u32)
+}
+
+/// Square index (`row * 5 + col`) of the `i`-th move, or -1 if out of range.
+#[no_mangle]
+pub extern "C" fn move_at(i: u32) -> i32 {
+    SESSION.with(|s| s.borrow().plies.get(i as usize).map_or(-1, |p| p.move_bit.trailing_zeros() as i32))
+}
+
+/// Number of undone moves that `redo` can replay.
+#[no_mangle]
+pub extern "C" fn redo_count() -> u32 {
+    SESSION.with(|s| s.borrow().redo.len() as u32)
+}
+
 fn play_bit(bit: u32) -> u32 {
     SESSION.with(|s| {
         let mut s = s.borrow_mut();
-        if s.over() || s.state.occupied() & bit != 0 {
+        let state = s.state();
+        if s.over() || state.occupied() & bit != 0 {
             return 0;
         }
-        let (next, won) = play_move(tables(), bit, &s.state);
-        if let Some(mask) = won {
-            s.winner = s.state.current as i32;
-            s.winning_mask = mask;
-        }
-        s.state = next;
-        s.history.push(next.key());
-        if won.is_none() && s.history.iter().filter(|&&k| k == next.key()).count() >= REPETITION_LIMIT {
-            s.draw = true;
-        }
+        let (next, won) = play_move(tables(), bit, &state);
+        s.plies.push(Ply { state: next, move_bit: bit, won });
+        s.redo.clear();
         1
     })
 }

@@ -213,6 +213,34 @@ Measured on the opening position (AI replying to a centre move), depth 5:
 | centre-first + killers | 60,000        | 0.4 s |
 | corner-first + killers | 35,000        | 0.25 s |
 
+### Quiescence: don't evaluate mid-exchange
+
+A fixed-depth search stops at arbitrary moments. If the last move searched was a capture,
+the static evaluation counts the captured piece as gone even when the very next move takes
+one back, and the search chases these phantom gains ("the horizon effect"). This game is
+full of capture exchanges, so it mattered a lot: at equal depth the fix won 36 of 50 games
+against the version without it.
+
+`quiescence` runs at every leaf instead of `evaluate`. The side to move may "stand pat"
+(take the static evaluation) or play any *capturing* move, and the search continues down
+captures only, for at most `QUIESCENCE_DEPTH` more plies. Two shortcuts: a leaf where the
+side to move already has three corners of a square with the fourth empty is scored as a
+win, and a capture that completes a square is a win.
+
+### Transposition table and iterative deepening
+
+The same position is reached by many move orders. `Search.tt` is a fixed-size table (65k
+entries) keyed by `State::key` that remembers the score, the depth it was searched to, and
+the best move found. On a hit deep enough, the score is reused (with care: a score found
+during a cut-off is only a bound, see `Bound`). On any hit, the stored best move is tried
+first, which is better move ordering than the killer heuristic alone.
+
+`best_move_budget` searches depth 1, then 2, then 3, and so on, keeping the table between
+iterations, until a node budget is used up or a forced win is found. Each iteration starts
+with the previous one's best move, so the deeper searches prune very well, and the cost of
+the shallow iterations is negligible. The page asks for a budget of 200k nodes and a
+maximum depth of 12; that is depth 7 or 8 in about 100 ms on a laptop.
+
 ## 7. Repetition
 
 Captures let positions recur: one side blocks a threat by capturing, the other recaptures
@@ -234,11 +262,27 @@ Two rules handle it, borrowed from chess:
 `State::key` packs both boards and the side to move into one `u64` so the check is a scan
 of a few dozen integers per node; it did not measurably change search time.
 
-## 8. Tuning knobs
+## 8. Measuring strength
 
-- `AI_DEPTH` in `square-game/script.js` (currently 7). Native timings for the AI's first
-  reply: depth 7 about 100 ms, depth 8 about 400 ms, depth 9 about 3 s. Expect a phone to
-  be 2-4x slower than that.
+Only measure; intuition about evaluation terms was wrong more often than right (a
+"two corners owned" potential term looked sensible and lost). Two tools in `wasm/examples`:
+
+- `cargo run --release --example arena -- human` plays the AI as red against a human-like
+  green (engine moves with a percentage of random blunders) over hundreds of games and
+  prints the win rate. That is the deployed situation. Pairwise engine-vs-engine matches
+  turned out to be nearly useless here: from any short opening, the side to move wins over
+  90% of games at equal strength, so results measure the seat, not the engine.
+- `cargo run --release --example analyse -- "1. C3 A1  2. ..."` replays a game pasted from
+  the page's "Copy moves" button and prints, ply by ply, what the engine would have played
+  instead. Use it on games the AI lost.
+
+## 9. Tuning knobs
+
+- `AI_NODE_BUDGET` and `AI_MAX_DEPTH` in `square-game/script.js`. The search runs at about
+  6 million nodes per second natively; a phone in WebAssembly is perhaps 3 to 5x slower.
+  The budget is checked between iterations, so a search can overshoot it by an iteration.
+- `QUIESCENCE_DEPTH` in `src/search.rs` (4): how far capture exchanges are followed at the
+  leaves.
 - The three weights and `WIN_SCORE` at the top of `src/search.rs`. Keep the weights
   summing to less than `WIN_SCORE` so wins always dominate.
 - `Evaluator::move_order` if you want to experiment with other static orderings.
@@ -246,7 +290,7 @@ of a few dozen integers per node; it did not measurably change search time.
   and a half threats): how much worse than a draw a position must be before the AI will
   repeat.
 
-## 9. The WebAssembly build
+## 10. The WebAssembly build
 
 `src/lib.rs` keeps one game in a thread-local `Session` and exports plain-integer
 functions, so the page needs no glue library:
@@ -261,7 +305,10 @@ functions, so the page needs no glue library:
 | `draw()`          | 1 once the game is drawn by threefold repetition                   |
 | `repetitions()`   | how many times the current position has occurred                   |
 | `play(row, col)`  | 1 if the move was applied, 0 if illegal or the game is over        |
-| `ai_play(depth)`  | choose and play a move for the side to move; returns its square index |
+| `ai_play(max_depth, node_budget)` | choose and play a move for the side to move; returns its square index |
+| `undo()` / `redo()` | take back / replay one ply; 1 if there was one. Undo clears a win or draw |
+| `move_count()`    | plies played so far; `move_at(i)` gives the i-th square index, -1 out of range |
+| `redo_count()`    | plies that `redo` can replay (cleared by `play`)                    |
 
 `square-game/script.js` fetches `ai.wasm`, calls `WebAssembly.instantiate`, and from then
 on only forwards clicks to `play`, calls `ai_play` on the AI's turn, and redraws the grid

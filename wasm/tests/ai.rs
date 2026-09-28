@@ -1,7 +1,9 @@
 //! Regression tests for the rules engine and the AI.  Run: cargo test --release
 
 use complete_the_square_ai::game::{play_move, square_bit, tables, State};
-use complete_the_square_ai::search::{best_move_index, evaluator, negamax, Search, DRAW_CONTEMPT, WIN_DEPTH_BONUS, WIN_SCORE};
+use complete_the_square_ai::search::{
+    best_move_index, negamax, quiescence, Search, DRAW_CONTEMPT, QUIESCENCE_DEPTH, WIN_DEPTH_BONUS, WIN_SCORE,
+};
 
 fn position(p0: &[(usize, usize)], p1: &[(usize, usize)], current: usize) -> State {
     let bits = |sq: &[(usize, usize)]| sq.iter().fold(0, |m, &(r, c)| m | square_bit(r, c));
@@ -28,14 +30,14 @@ fn alpha_beta_matches_plain_minimax() {
     // Pruning and move ordering must never change the value of a position.
     // (Same rules as the real search: a repeated position is a draw worth
     // -DRAW_CONTEMPT to the root player.)
-    fn plain(state: &State, depth: u32, root: usize, path: &mut Vec<u64>) -> f64 {
-        let (t, ev) = (tables(), evaluator());
+    fn plain(s: &mut Search, state: &State, depth: u32, root: usize, path: &mut Vec<u64>) -> f64 {
+        let t = tables();
         let draw = if state.current == root { -DRAW_CONTEMPT } else { DRAW_CONTEMPT };
         if path.contains(&state.key()) {
             return draw;
         }
         if depth == 0 {
-            return ev.evaluate(t, state);
+            return quiescence(s, state, f64::NEG_INFINITY, f64::INFINITY, QUIESCENCE_DEPTH);
         }
         let empty = state.empty();
         if empty == 0 {
@@ -53,7 +55,7 @@ fn alpha_beta_matches_plain_minimax() {
                 best = WIN_SCORE + WIN_DEPTH_BONUS * depth as f64;
                 break;
             }
-            best = best.max(-plain(&child, depth - 1, root, path));
+            best = best.max(-plain(s, &child, depth - 1, root, path));
         }
         path.pop();
         best
@@ -85,8 +87,8 @@ fn alpha_beta_matches_plain_minimax() {
         if game_over {
             continue;
         }
-        let expected = plain(&state, 3, state.current, &mut Vec::new());
-        let mut search = Search::new(&state, 3, &[]);
+        let mut search = Search::new(&state, 3, &[]).without_tt();
+        let expected = plain(&mut search, &state, 3, state.current, &mut Vec::new());
         search.path.clear(); // negamax pushes the root itself, as plain() does
         let actual = negamax(&mut search, &state, 3, f64::NEG_INFINITY, f64::INFINITY);
         assert!((expected - actual).abs() < 1e-12, "{state:?}: {expected} vs {actual}");
@@ -134,4 +136,70 @@ fn avoids_repetition_and_declares_threefold_draw() {
     assert_eq!(winner(), -1);
     assert_eq!(draw(), 1, "threefold repetition should end the game");
     assert_eq!(play(3, 3), 0, "no moves after the draw");
+}
+
+#[test]
+fn undo_and_redo() {
+    use complete_the_square_ai::{
+        board, current_player, draw, move_at, move_count, play, redo, redo_count, reset, undo, winner, winning_mask,
+    };
+    let snapshot = || {
+        let moves: Vec<i32> = (0..move_count()).map(|i| move_at(i)).collect();
+        (board(0), board(1), current_player(), winner(), winning_mask(), draw(), moves)
+    };
+
+    reset();
+    // Green (2,0) on the last move captures red's (2,1),(2,2), flanked by (2,3).
+    let moves = [(2, 3), (2, 1), (4, 4), (2, 2), (0, 0), (1, 1), (2, 0)];
+    for &(r, c) in &moves {
+        assert_eq!(play(r, c), 1);
+    }
+    assert_eq!(move_count(), 7);
+    assert_eq!(move_at(6), 2 * 5);
+    assert_eq!(move_at(7), -1);
+    assert_eq!(squares(board(1)), vec![(1, 1)]);
+    let after_capture = snapshot();
+
+    // Undo past the capture: the captured pieces are back and it is green's move.
+    assert_eq!(undo(), 1);
+    assert_eq!(move_count(), 6);
+    assert_eq!(redo_count(), 1);
+    assert_eq!(current_player(), 0);
+    assert_eq!(squares(board(1)), vec![(1, 1), (2, 1), (2, 2)]);
+    assert_eq!(squares(board(0)), vec![(0, 0), (2, 3), (4, 4)]);
+    assert_eq!(undo(), 1);
+    assert_eq!(move_count(), 5);
+    assert_eq!(redo_count(), 2);
+
+    // Redo restores exactly the position before the undo.
+    assert_eq!(redo(), 1);
+    assert_eq!(redo(), 1);
+    assert_eq!(redo(), 0);
+    assert_eq!(snapshot(), after_capture);
+
+    // A new move after an undo discards the redo stack.
+    assert_eq!(undo(), 1);
+    assert_eq!(play(3, 3), 1);
+    assert_eq!(redo_count(), 0);
+    assert_eq!(redo(), 0);
+    assert_eq!(move_count(), 7);
+    assert_eq!(move_at(6), 3 * 5 + 3);
+
+    // Undoing a winning move reopens the game; redoing it wins again.
+    // (Green (2,0) recaptures (2,1),(2,2); (0,2) captures (1,1); (2,2) completes the 3x3.)
+    for &(r, c) in &[(4, 0), (2, 0), (4, 1), (0, 2), (4, 2), (2, 2)] {
+        assert_eq!(play(r, c), 1);
+    }
+    assert_eq!(winner(), 0, "green completed (0,0),(0,2),(2,0),(2,2)");
+    assert_eq!(play(4, 3), 0);
+    assert_eq!(undo(), 1);
+    assert_eq!((winner(), winning_mask(), current_player()), (-1, 0, 0));
+    assert_eq!(redo(), 1);
+    assert_eq!(winner(), 0);
+    assert_eq!(undo(), 1);
+    assert_eq!(play(4, 3), 1, "the game is open again after the undo");
+
+    // Nothing left to undo after reset.
+    reset();
+    assert_eq!((undo(), redo(), move_count(), redo_count()), (0, 0, 0, 0));
 }

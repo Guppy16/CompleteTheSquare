@@ -26,6 +26,8 @@ rustup target add wasm32-unknown-unknown   # once
 cd wasm
 cargo test --release                       # regression tests
 ./build.sh                                 # rebuild square-game/ai.wasm
+cargo run --release --example analyse -- "1. C3 A1  2. B2 D4"   # what the AI would have played
+cargo run --release --example arena -- human                    # win rate vs a human-like opponent
 ```
 
 The compiled `ai.wasm` is committed, so the site needs no build step to deploy.

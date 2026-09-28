@@ -13,6 +13,11 @@ pub const MAX_THREATS: i32 = 3;
 /// -DRAW_CONTEMPT (and +DRAW_CONTEMPT for the opponent), so the AI only
 /// repeats when every alternative looks worse than this.
 pub const DRAW_CONTEMPT: f64 = 0.2;
+/// At a leaf, keep searching capture moves this many plies further so the
+/// evaluation is never taken in the middle of a capture exchange.
+pub const QUIESCENCE_DEPTH: u32 = 4;
+/// Transposition table size (entries); a power of two.
+const TT_SIZE: usize = 1 << 16;
 
 pub struct Evaluator {
     corner_mask: u32,
@@ -56,6 +61,11 @@ impl Evaluator {
         }
     }
 
+    /// Does `mine` have a square with 3 corners and the 4th empty (a win next move)?
+    pub fn has_threat(&self, t: &Tables, mine: u32, theirs: u32) -> bool {
+        t.all_corner_masks.iter().any(|&mask| theirs & mask == 0 && (mine & mask).count_ones() == 3)
+    }
+
     fn threat_difference(&self, t: &Tables, mine: u32, theirs: u32) -> i32 {
         let mut diff = 0;
         for &mask in &t.all_corner_masks {
@@ -86,10 +96,35 @@ impl Evaluator {
     }
 }
 
-/// Legal move bits: the killer first, then corner-out order.
-fn ordered_moves<'a>(ev: &'a Evaluator, empty: u32, killer: Bit) -> impl Iterator<Item = Bit> + 'a {
-    let first = if killer & empty != 0 { Some(killer) } else { None };
-    first.into_iter().chain(ev.move_order.iter().copied().filter(move |&b| b & empty != 0 && b != killer))
+/// Legal move bits: the table's best move first, then the killer, then corner-out order.
+fn ordered_moves(ev: &Evaluator, empty: u32, first: Bit, killer: Bit) -> Vec<Bit> {
+    let mut out = Vec::with_capacity(empty.count_ones() as usize);
+    if first & empty != 0 {
+        out.push(first);
+    }
+    if killer & empty != 0 && killer != first {
+        out.push(killer);
+    }
+    out.extend(ev.move_order.iter().copied().filter(|&b| b & empty != 0 && b != first && b != killer));
+    out
+}
+
+/// What a transposition-table score means, given the (alpha, beta) window it
+/// was found with.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Bound {
+    Exact,
+    Lower, // the true score is at least this (search was cut off)
+    Upper, // the true score is at most this (no move reached alpha)
+}
+
+#[derive(Clone, Copy)]
+struct TtEntry {
+    key: u64,
+    depth: u32,
+    score: f64,
+    bound: Bound,
+    best: Bit,
 }
 
 /// Everything one search needs besides the position.
@@ -102,6 +137,10 @@ pub struct Search {
     pub path: Vec<u64>,
     /// killers[depth] = the move that last caused a cut-off at that depth.
     pub killers: Vec<Bit>,
+    /// Positions already searched, keyed by `State::key`. `None` disables it.
+    tt: Option<Vec<TtEntry>>,
+    /// Nodes visited so far (for the node budget).
+    pub nodes: u64,
 }
 
 impl Search {
@@ -110,7 +149,36 @@ impl Search {
         if path.last() != Some(&root.key()) {
             path.push(root.key());
         }
-        Search { tables: tables(), evaluator: evaluator(), root_player: root.current, path, killers: vec![0; depth as usize + 1] }
+        let empty = TtEntry { key: 0, depth: 0, score: 0.0, bound: Bound::Exact, best: 0 };
+        Search {
+            tables: tables(),
+            evaluator: evaluator(),
+            root_player: root.current,
+            path,
+            killers: vec![0; depth as usize + 1],
+            tt: Some(vec![empty; TT_SIZE]),
+            nodes: 0,
+        }
+    }
+
+    /// A search without the transposition table (plain alpha-beta).
+    pub fn without_tt(mut self) -> Self {
+        self.tt = None;
+        self
+    }
+
+    fn tt_index(key: u64) -> usize {
+        (key.wrapping_mul(0x9E37_79B9_7F4A_7C15) >> 48) as usize & (TT_SIZE - 1)
+    }
+
+    fn tt_get(&self, key: u64) -> Option<&TtEntry> {
+        self.tt.as_ref().map(|t| &t[Self::tt_index(key)]).filter(|e| e.key == key)
+    }
+
+    fn tt_put(&mut self, entry: TtEntry) {
+        if let Some(t) = self.tt.as_mut() {
+            t[Self::tt_index(entry.key)] = entry; // always replace: simple and good enough
+        }
     }
 
     /// Score of a draw for the player to move in `state`.
@@ -119,32 +187,117 @@ impl Search {
     }
 }
 
-pub fn negamax(s: &mut Search, state: &State, depth: u32, mut alpha: f64, beta: f64) -> f64 {
+/// Bits of the empty squares where the side to move would capture something.
+fn capture_moves(t: &Tables, state: &State) -> Vec<Bit> {
+    let own = state.boards[state.current];
+    let opp = state.boards[1 - state.current];
+    let mut out = Vec::new();
+    let mut empty = state.empty();
+    while empty != 0 {
+        let bit = empty & empty.wrapping_neg();
+        empty ^= bit;
+        let captures = t.capture_rays[bit_index(bit)].iter().any(|ray| {
+            let mut seen_opp = false;
+            for &b in ray {
+                if opp & b != 0 {
+                    seen_opp = true;
+                } else {
+                    return seen_opp && own & b != 0;
+                }
+            }
+            false
+        });
+        if captures {
+            out.push(bit);
+        }
+    }
+    out
+}
+
+/// Quiescence search: evaluate only positions where no capture is pending.
+/// The side to move may "stand pat" (take the static evaluation) or play a
+/// capture, whichever is better for them.
+pub fn quiescence(s: &mut Search, state: &State, mut alpha: f64, beta: f64, qdepth: u32) -> f64 {
+    s.nodes += 1;
+    let (t, ev) = (s.tables, s.evaluator);
+    let (mine, theirs) = (state.boards[state.current], state.boards[1 - state.current]);
+    if ev.has_threat(t, mine, theirs) {
+        return WIN_SCORE; // we complete a square next move
+    }
+    let stand_pat = ev.evaluate(t, state);
+    if qdepth == 0 || stand_pat >= beta {
+        return stand_pat;
+    }
+    if stand_pat > alpha {
+        alpha = stand_pat;
+    }
+    let mut best = stand_pat;
+    for bit in capture_moves(t, state) {
+        let (child, won) = play_move(t, bit, state);
+        if won.is_some() {
+            return WIN_SCORE;
+        }
+        let score = -quiescence(s, &child, -beta, -alpha, qdepth - 1);
+        if score > best {
+            best = score;
+        }
+        if best > alpha {
+            alpha = best;
+        }
+        if alpha >= beta {
+            break;
+        }
+    }
+    best
+}
+
+pub fn negamax(s: &mut Search, state: &State, depth: u32, mut alpha: f64, mut beta: f64) -> f64 {
+    s.nodes += 1;
+    let key = state.key();
     // A position we have already been through can only lead to a draw by
     // repetition, whatever the evaluation says about it.
-    if s.path.contains(&state.key()) {
+    if s.path.contains(&key) {
         return s.draw_score(state);
     }
     if depth == 0 {
-        return s.evaluator.evaluate(s.tables, state);
+        return quiescence(s, state, alpha, beta, QUIESCENCE_DEPTH);
     }
     let empty = state.empty();
     if empty == 0 {
         return s.draw_score(state);
     }
 
-    s.path.push(state.key());
+    // Have we searched this position before, at least this deep?
+    let mut first = 0;
+    if let Some(e) = s.tt_get(key) {
+        first = e.best;
+        if e.depth >= depth {
+            match e.bound {
+                Bound::Exact => return e.score,
+                Bound::Lower => alpha = alpha.max(e.score),
+                Bound::Upper => beta = beta.min(e.score),
+            }
+            if alpha >= beta {
+                return e.score;
+            }
+        }
+    }
+    let alpha_in = alpha;
+
+    s.path.push(key);
     let mut best = f64::NEG_INFINITY;
-    let moves: Vec<Bit> = ordered_moves(s.evaluator, empty, s.killers[depth as usize]).collect();
-    for bit in moves {
+    let mut best_bit = 0;
+    for bit in ordered_moves(s.evaluator, empty, first, s.killers[depth as usize]) {
         let (child, won) = play_move(s.tables, bit, state);
         if won.is_some() {
             best = WIN_SCORE + WIN_DEPTH_BONUS * depth as f64;
+            best_bit = bit;
             break;
         }
         let score = -negamax(s, &child, depth - 1, -beta, -alpha);
         if score > best {
             best = score;
+            best_bit = bit;
         }
         if best > alpha {
             alpha = best;
@@ -155,32 +308,64 @@ pub fn negamax(s: &mut Search, state: &State, depth: u32, mut alpha: f64, beta: 
         }
     }
     s.path.pop();
+
+    let bound = if best >= beta { Bound::Lower } else if best <= alpha_in { Bound::Upper } else { Bound::Exact };
+    s.tt_put(TtEntry { key, depth, score: best, bound, best: best_bit });
     best
 }
 
-/// The move bit the player to move should play, or None if the board is full.
-/// `history` holds the keys of the positions played so far (see `State::key`).
-pub fn best_move(state: &State, depth: u32, history: &[u64]) -> Option<Bit> {
-    let mut s = Search::new(state, depth, history);
+/// One full-width search of the root to `depth`, trying `first` first.
+/// Returns (best move, its score).
+fn search_root(s: &mut Search, state: &State, depth: u32, first: Bit) -> Option<(Bit, f64)> {
     let empty = state.empty();
-    let mut best_bit = None;
-    let mut best_score = f64::NEG_INFINITY;
+    let mut best: Option<(Bit, f64)> = None;
     let (mut alpha, beta) = (f64::NEG_INFINITY, f64::INFINITY);
-
-    let moves: Vec<Bit> = ordered_moves(s.evaluator, empty, 0).collect();
-    for bit in moves {
+    for bit in ordered_moves(s.evaluator, empty, first, 0) {
         let (child, won) = play_move(s.tables, bit, state);
         if won.is_some() {
-            return Some(bit);
+            return Some((bit, WIN_SCORE + WIN_DEPTH_BONUS * depth as f64));
         }
-        let score = -negamax(&mut s, &child, depth - 1, -beta, -alpha);
-        if score > best_score {
-            best_score = score;
-            best_bit = Some(bit);
+        let score = -negamax(s, &child, depth - 1, -beta, -alpha);
+        if best.map_or(true, |(_, b)| score > b) {
+            best = Some((bit, score));
         }
-        alpha = alpha.max(best_score);
+        alpha = alpha.max(score);
     }
-    best_bit
+    best
+}
+
+/// Iterative deepening: search depth 1, 2, ... up to `max_depth`, stopping
+/// early once `node_budget` nodes have been visited. Each iteration reuses
+/// the previous one's transposition table and best move, so the deeper
+/// searches start with excellent move ordering.
+pub fn best_move_budget(state: &State, max_depth: u32, node_budget: u64, history: &[u64]) -> Option<Bit> {
+    search_depth_reached(state, max_depth, node_budget, history).0
+}
+
+/// As `best_move_budget`, also returning the depth reached and nodes visited.
+pub fn search_depth_reached(state: &State, max_depth: u32, node_budget: u64, history: &[u64]) -> (Option<Bit>, u32, u64) {
+    let mut s = Search::new(state, max_depth, history);
+    let mut best = None;
+    let mut reached = 0;
+    for depth in 1..=max_depth.max(1) {
+        let first = best.map_or(0, |(b, _)| b);
+        best = search_root(&mut s, state, depth, first);
+        reached = depth;
+        match best {
+            None => return (None, reached, s.nodes),               // no legal moves
+            Some((_, score)) if score.abs() >= WIN_SCORE => break, // forced result found
+            _ if s.nodes >= node_budget => break,
+            _ => {}
+        }
+    }
+    (best.map(|(bit, _)| bit), reached, s.nodes)
+}
+
+/// The move bit the player to move should play, searching exactly `depth`
+/// plies (iteratively deepened, no node budget), or None if the board is full.
+/// `history` holds the keys of the positions played so far (see `State::key`).
+pub fn best_move(state: &State, depth: u32, history: &[u64]) -> Option<Bit> {
+    best_move_budget(state, depth, u64::MAX, history)
 }
 
 pub fn best_move_index(state: &State, depth: u32, history: &[u64]) -> Option<usize> {

@@ -4,7 +4,11 @@
 // This file only forwards clicks to it and redraws the board from its state.
 
 const BOARD_SIZE = 5;
-const AI_DEPTH = 7;                    // plies; ~100 ms per move on a laptop
+// The AI searches deeper and deeper until it has visited AI_NODE_BUDGET
+// positions (about 100 ms on a laptop, well under a second on a phone) or
+// reached AI_MAX_DEPTH plies.
+const AI_MAX_DEPTH = 12;
+const AI_NODE_BUDGET = 200000;
 const WASM_URL = 'square-game/ai.wasm';
 const COLOURS = ['W', 'B'];            // player 0 is green (W), player 1 is red (B)
 const COLUMN_LABELS = 'ABCDEFGHIJ';     // columns are lettered, rows numbered from the top
@@ -15,6 +19,10 @@ let playAgainstAI = false;             // default: two humans, one screen
 const boardEl = document.getElementById('board');
 const statusEl = document.getElementById('status');
 const playAgainButton = document.getElementById('play-again');
+const undoButton = document.getElementById('undo');
+const redoButton = document.getElementById('redo');
+const copyButton = document.getElementById('copy-moves');
+const moveListEl = document.getElementById('move-list');
 const aiToggle = document.getElementById('ai-toggle');
 const leftOption = document.querySelector('.switch-option.left');
 const rightOption = document.querySelector('.switch-option.right');
@@ -45,6 +53,42 @@ function isAITurn() {
   return playAgainstAI && !gameOver() && ai.current_player() === 1;
 }
 
+// Square index -> "C3": columns lettered, rows numbered from 1 at the top.
+function squareName(index) {
+  return COLUMN_LABELS[index % BOARD_SIZE] + (Math.floor(index / BOARD_SIZE) + 1);
+}
+
+// The moves so far as numbered pairs: ["1. C3 A1", "2. B2 D4", "3. E5"].
+function movePairs() {
+  const pairs = [];
+  const count = ai.move_count();
+  for (let i = 0; i < count; i += 2) {
+    let pair = `${i / 2 + 1}. ${squareName(ai.move_at(i))}`;
+    if (i + 1 < count) pair += ` ${squareName(ai.move_at(i + 1))}`;
+    pairs.push(pair);
+  }
+  return pairs;
+}
+
+function moveText() {
+  return movePairs().join('  ');
+}
+
+function renderMoves() {
+  moveListEl.innerHTML = '';
+  const pairs = movePairs();
+  if (pairs.length === 0) {
+    moveListEl.textContent = 'No moves yet';
+    return;
+  }
+  pairs.forEach(pair => {
+    const span = document.createElement('span');
+    span.classList.add('pair');
+    span.textContent = pair;
+    moveListEl.appendChild(span);
+  });
+}
+
 // Redraw everything from the module's state.
 function render() {
   const boards = [ai.board(0), ai.board(1)];
@@ -73,24 +117,80 @@ function render() {
     }
   }
   playAgainButton.hidden = !over;
+  // No taking back while the AI is about to move.
+  const waiting = isAITurn();
+  undoButton.disabled = waiting || ai.move_count() === 0;
+  redoButton.disabled = waiting || ai.redo_count() === 0;
+  copyButton.disabled = ai.move_count() === 0;
+  renderMoves();
   boardEl.classList.remove('thinking');
 }
 
+function logMoves() {
+  console.log(moveText());
+}
+
+// Hand the move to the AI after the browser has painted the current position.
+function requestAIMove() {
+  statusEl.textContent = 'AI is thinking…';
+  boardEl.classList.add('thinking');
+  undoButton.disabled = true;
+  redoButton.disabled = true;
+  setTimeout(aiMove, 20);
+}
+
 function aiMove() {
-  ai.ai_play(AI_DEPTH);
+  ai.ai_play(AI_MAX_DEPTH, AI_NODE_BUDGET);
+  logMoves();
   render();
 }
 
 function onCellClick(row, col) {
   if (!ai || isAITurn()) return;       // not loaded yet, or waiting for the AI
   if (!ai.play(row, col)) return;      // occupied, or game over
+  logMoves();
   render();
+  if (isAITurn()) requestAIMove();
+}
 
-  if (isAITurn()) {
-    statusEl.textContent = 'AI is thinking…';
-    boardEl.classList.add('thinking');
-    setTimeout(aiMove, 20);            // let the browser paint the human's move first
+// Against the AI, take back the AI's reply too so it is the human's move again.
+function onUndo() {
+  if (!ai || isAITurn()) return;
+  if (!ai.undo()) return;
+  if (playAgainstAI && ai.current_player() === 1) ai.undo();
+  render();
+  if (isAITurn()) requestAIMove();     // never leave the game waiting on the AI
+}
+
+function onRedo() {
+  if (!ai || isAITurn()) return;
+  if (!ai.redo()) return;
+  if (playAgainstAI && ai.current_player() === 1 && ai.redo_count() > 0) ai.redo();
+  render();
+  if (isAITurn()) requestAIMove();
+}
+
+function onCopyMoves() {
+  if (!ai) return;
+  const text = moveText();
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+  } else {
+    fallbackCopy(text);
   }
+}
+
+// Without the clipboard API, select the list so the user can copy it, or show it in a prompt.
+function fallbackCopy(text) {
+  if (window.getSelection && document.createRange) {
+    const range = document.createRange();
+    range.selectNodeContents(moveListEl);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    if (document.execCommand && document.execCommand('copy')) return;
+  }
+  window.prompt('Copy the moves:', text);
 }
 
 function newGame() {
@@ -134,6 +234,10 @@ aiToggle.addEventListener('change', () => {
 playAgainButton.addEventListener('click', () => {
   if (ai) newGame();
 });
+
+undoButton.addEventListener('click', onUndo);
+redoButton.addEventListener('click', onRedo);
+copyButton.addEventListener('click', onCopyMoves);
 
 async function loadAI() {
   const bytes = await (await fetch(WASM_URL)).arrayBuffer();
