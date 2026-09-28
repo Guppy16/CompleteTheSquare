@@ -46,6 +46,7 @@ fn main() {
     let t = tables();
     let mut state = State::new();
     let mut history = vec![state.key()];
+    let mut game_over = false;
 
     println!("ply  side  played  engine  (depth {depth})");
     for (i, &bit) in moves.iter().enumerate() {
@@ -58,11 +59,12 @@ fn main() {
         history.push(state.key());
         if won.is_some() {
             println!("{side} wins.");
+            game_over = true;
             break;
         }
     }
     println!("{}", show(&state));
-    if state.empty() != 0 {
+    if state.empty() != 0 && !game_over {
         let side = if state.current == 0 { "G" } else { "R" };
         println!("\n{side} to move; every move scored at depth {depth} (positive is good for {side}):");
         for (bit, score) in root_scores(&state, depth, &history) {

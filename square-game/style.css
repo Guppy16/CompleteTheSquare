@@ -196,11 +196,13 @@ button[hidden] {
 /* Tiny picture of the position after each move; the two squares just
    played are in the brighter shade. */
 .mini-board {
-  --mini-cell: 4px;
+  --mini-cell: 5px;
   display: inline-grid;
   grid-template-columns: repeat(var(--board-size), var(--mini-cell));
+  gap: 1px;                 /* thin dark grid lines between the squares */
+  padding: 1px;
+  background: var(--bg);
   vertical-align: middle;
-  border: 1px solid var(--border);
 }
 
 .mini-board span {
