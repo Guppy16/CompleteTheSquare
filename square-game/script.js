@@ -23,6 +23,10 @@ const undoButton = document.getElementById('undo');
 const redoButton = document.getElementById('redo');
 const copyButton = document.getElementById('copy-moves');
 const moveListEl = document.getElementById('move-list');
+const miniBoardEl = document.getElementById('mini-board');
+const miniCaptionEl = document.getElementById('mini-caption');
+const miniCells = [];
+let previewPly = null;                 // move list selection: show the position after this many moves
 const aiToggle = document.getElementById('ai-toggle');
 const leftOption = document.querySelector('.switch-option.left');
 const rightOption = document.querySelector('.switch-option.right');
@@ -74,19 +78,52 @@ function moveText() {
   return movePairs().join('  ');
 }
 
+// Tapping a move shows the position after it in the tiny board; tapping it
+// again (or making a move) goes back to the current position.
+function selectPly(ply) {
+  previewPly = previewPly === ply ? null : ply;
+  renderMoves();
+  renderMini();
+}
+
 function renderMoves() {
   moveListEl.innerHTML = '';
-  const pairs = movePairs();
-  if (pairs.length === 0) {
+  const count = ai.move_count();
+  if (count === 0) {
     moveListEl.textContent = 'No moves yet';
     return;
   }
-  pairs.forEach(pair => {
-    const span = document.createElement('span');
-    span.classList.add('pair');
-    span.textContent = pair;
-    moveListEl.appendChild(span);
+  for (let i = 0; i < count; i += 2) {
+    const pair = document.createElement('span');
+    pair.classList.add('pair');
+    pair.textContent = `${i / 2 + 1}. `;
+    for (const ply of [i + 1, i + 2]) {
+      if (ply > count) break;
+      const move = document.createElement('span');
+      move.classList.add('move');
+      if (ply === previewPly) move.classList.add('selected');
+      move.textContent = squareName(ai.move_at(ply - 1));
+      move.addEventListener('click', () => selectPly(ply));
+      pair.appendChild(move);
+      if (ply === i + 1) pair.appendChild(document.createTextNode(' '));
+    }
+    moveListEl.appendChild(pair);
+  }
+}
+
+function renderMini() {
+  const ply = previewPly === null ? ai.move_count() : previewPly;
+  const boards = [ai.board_at(ply, 0), ai.board_at(ply, 1)];
+  miniCells.forEach((cell, i) => {
+    const bit = 1 << i;
+    cell.className = '';
+    boards.forEach((board, player) => {
+      if (board & bit) cell.classList.add(`player-${COLOURS[player]}`);
+    });
   });
+  miniCaptionEl.textContent = previewPly === null
+    ? 'current position'
+    : `after ${Math.ceil(ply / 2)}. ${squareName(ai.move_at(ply - 1))}`;
 }
 
 // Redraw everything from the module's state.
@@ -122,7 +159,9 @@ function render() {
   undoButton.disabled = waiting || ai.move_count() === 0;
   redoButton.disabled = waiting || ai.redo_count() === 0;
   copyButton.disabled = ai.move_count() === 0;
+  previewPly = null;                   // the position changed: preview the current one
   renderMoves();
+  renderMini();
   boardEl.classList.remove('thinking');
 }
 
@@ -209,6 +248,13 @@ function addLabel(text) {
 function buildBoard() {
   boardEl.innerHTML = '';
   cells.length = 0;
+  miniBoardEl.innerHTML = '';
+  miniCells.length = 0;
+  for (let i = 0; i < BOARD_SIZE * BOARD_SIZE; i++) {
+    const cell = document.createElement('div');
+    miniBoardEl.appendChild(cell);
+    miniCells.push(cell);
+  }
   addLabel('');
   for (let c = 0; c < BOARD_SIZE; c++) addLabel(COLUMN_LABELS[c]);
   for (let r = 0; r < BOARD_SIZE; r++) {

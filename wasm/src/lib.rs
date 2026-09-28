@@ -182,6 +182,21 @@ pub extern "C" fn move_at(i: u32) -> i32 {
     SESSION.with(|s| s.borrow().plies.get(i as usize).map_or(-1, |p| p.move_bit.trailing_zeros() as i32))
 }
 
+/// Bitboard of `player`'s pieces after the first `ply` moves (0 = the empty
+/// board). Out-of-range plies give the current position.
+#[no_mangle]
+pub extern "C" fn board_at(ply: u32, player: u32) -> u32 {
+    SESSION.with(|s| {
+        let s = s.borrow();
+        let state = match ply as usize {
+            0 => State::new(),
+            n if n <= s.plies.len() => s.plies[n - 1].state,
+            _ => s.state(),
+        };
+        state.boards.get(player as usize).copied().unwrap_or(0)
+    })
+}
+
 /// Number of undone moves that `redo` can replay.
 #[no_mangle]
 pub extern "C" fn redo_count() -> u32 {
