@@ -11,10 +11,13 @@ const BOARD_SIZE = 5;
 const AI_MAX_DEPTH = 12;
 const AI_NODE_BUDGET = 400000;
 // Analysis: keep re-analysing with a doubling budget, like an engine that
-// keeps thinking, until the depth or budget cap is reached.
-const ANALYSIS_MAX_DEPTH = 16;
+// keeps thinking, until the depth or budget cap is reached. The budget is
+// what bounds the time: 64M nodes is roughly half a minute on a laptop in
+// WebAssembly and about a minute on a phone. The worker keeps its table, so
+// each pass (and the analysis after the next move) builds on the last one.
+const ANALYSIS_MAX_DEPTH = 12;
 const ANALYSIS_FIRST_BUDGET = 500000;
-const ANALYSIS_MAX_BUDGET = 16000000;
+const ANALYSIS_MAX_BUDGET = 64000000;
 const ANALYSIS_LINES = 3;              // how many candidate lines to show
 const WASM_URL = 'square-game/ai.wasm';
 const WORKER_URL = 'square-game/worker.js';
