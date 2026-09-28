@@ -2,28 +2,29 @@
 //
 // All game state and rules live in the WebAssembly module (built from wasm/).
 // This file only forwards clicks to it and redraws the board from its state.
+// The engine's searches run in a Web Worker (worker.js) so the page never
+// blocks.
 
 const BOARD_SIZE = 5;
-// The AI searches deeper and deeper until it has visited AI_NODE_BUDGET
-// positions (about 70 ms on a laptop, a few hundred ms on a phone) or
-// reached AI_MAX_DEPTH plies.
+// Against the AI: search deeper and deeper until AI_NODE_BUDGET positions
+// have been visited (about 70 ms on a laptop, a few hundred ms on a phone).
 const AI_MAX_DEPTH = 12;
 const AI_NODE_BUDGET = 400000;
+// Analysis: keep re-analysing with a doubling budget, like an engine that
+// keeps thinking, until the depth or budget cap is reached.
+const ANALYSIS_MAX_DEPTH = 16;
+const ANALYSIS_FIRST_BUDGET = 500000;
+const ANALYSIS_MAX_BUDGET = 16000000;
+const ANALYSIS_LINES = 3;              // how many candidate lines to show
 const WASM_URL = 'square-game/ai.wasm';
 const WORKER_URL = 'square-game/worker.js';
 const COLOURS = ['W', 'B'];            // player 0 is green (W), player 1 is red (B)
 const COLUMN_LABELS = 'ABCDEFGHIJ';     // columns are lettered, rows numbered from the top
 
 let ai = null;                         // the module's exports, once loaded
-let playAgainstAI = false;             // default: two humans, one screen
+let mode = 'board';                    // 'board' (two humans), 'ai', or 'analysis'
 let aiPlayer = 1;                      // which side the AI plays in AI mode (0 = green, first)
-const aiFirstBox = document.getElementById('ai-first');
-const sideSelect = document.getElementById('side-select');
-const analysisSelect = document.getElementById('analysis-select');
-const analysisToggle = document.getElementById('analysis-toggle');
-const analysisEl = document.getElementById('analysis');
-let analysisOn = false;                // over-the-board only: score every move after each position
-const ANALYSIS_NODE_BUDGET = 1500000;  // a few times the play budget; scores every move exactly
+let analysisGeneration = 0;            // bumped whenever the position or mode changes
 
 const boardEl = document.getElementById('board');
 const statusEl = document.getElementById('status');
@@ -34,9 +35,13 @@ const copyButton = document.getElementById('copy-moves');
 const hintButton = document.getElementById('hint');
 const pasteButton = document.getElementById('paste-moves');
 const moveListEl = document.getElementById('move-list');
-const aiToggle = document.getElementById('ai-toggle');
-const leftOption = document.querySelector('.switch-option.left');
-const rightOption = document.querySelector('.switch-option.right');
+const analysisEl = document.getElementById('analysis');
+const evalBar = document.getElementById('eval-bar');
+const evalFill = document.getElementById('eval-fill');
+const evalText = document.getElementById('eval-text');
+const sideSelect = document.getElementById('side-select');
+const aiFirstBox = document.getElementById('ai-first');
+const tabs = Array.from(document.querySelectorAll('#mode-select .tab'));
 const cells = [];                      // index = row * BOARD_SIZE + col, same as the bitboard
 
 document.documentElement.style.setProperty('--board-size', BOARD_SIZE);
@@ -61,7 +66,7 @@ function gameOver() {
 }
 
 function isAITurn() {
-  return playAgainstAI && !gameOver() && ai.current_player() === aiPlayer;
+  return mode === 'ai' && !gameOver() && ai.current_player() === aiPlayer;
 }
 
 // Square index -> "C3": columns lettered, rows numbered from 1 at the top.
@@ -86,7 +91,7 @@ function moveText() {
 }
 
 // A tiny picture of the position after `ply` half-moves, with the squares
-// of the plies in `lastMoves` outlined.
+// of the plies in `lastMoves` in the brighter shade.
 function miniBoard(ply, lastMoves) {
   const mini = document.createElement('span');
   mini.classList.add('mini-board');
@@ -104,7 +109,7 @@ function miniBoard(ply, lastMoves) {
 }
 
 // One entry per move (a pair of plies, one per side): "3. C3 D4" followed by
-// the position after them with those two squares outlined.
+// the position after them.
 function renderMoves() {
   moveListEl.innerHTML = '';
   const count = ai.move_count();
@@ -137,6 +142,7 @@ function render() {
   cells.forEach((cell, i) => {
     const bit = 1 << i;
     cell.className = 'cell';
+    cell.textContent = '';             // drops any analysis marker
     boards.forEach((board, player) => {
       if (board & bit) cell.classList.add(`player-${COLOURS[player]}`, 'disabled');
     });
@@ -161,20 +167,22 @@ function render() {
   redoButton.disabled = waiting || ai.redo_count() === 0;
   copyButton.disabled = ai.move_count() === 0;
   pasteButton.disabled = waiting;
+  hintButton.hidden = mode === 'analysis';
   hintButton.disabled = waiting || over;
-  if (analysisOn) requestAnalysis(); else analysisEl.hidden = true;
   renderMoves();
   boardEl.classList.remove('thinking');
+  startAnalysis();                     // no-op unless in analysis mode
 }
 
 function logMoves() {
   console.log(moveText());
 }
 
-// The search runs in a Web Worker so the page stays responsive. askEngine()
-// sends the moves played so far and resolves with the engine's chosen square
-// for the side to move. Falls back to searching on this thread if workers
-// are unavailable.
+// --- Engine requests -------------------------------------------------------
+//
+// askEngine() sends the moves played so far to the worker and resolves with
+// its answer: a square to play ('move'), or every move scored with its
+// expected line ('analyse'). Falls back to the main thread without workers.
 const engineWorker = typeof Worker === 'undefined' ? null : new Worker(WORKER_URL);
 const engineRequests = new Map();       // request id -> resolve
 let engineRequestId = 0;
@@ -188,69 +196,117 @@ if (engineWorker) {
   engineWorker.onerror = err => console.error('engine worker failed:', err);
 }
 
-function askEngine(kind = 'move') {
+function askEngine(kind, maxDepth, nodeBudget) {
   const moves = [];
   for (let i = 0; i < ai.move_count(); i++) moves.push(ai.move_at(i));
-  const nodeBudget = kind === 'analyse' ? ANALYSIS_NODE_BUDGET : AI_NODE_BUDGET;
   if (!engineWorker) {
     const started = performance.now();
     if (kind === 'analyse') {
-      const count = ai.analyse(AI_MAX_DEPTH, nodeBudget);
+      const count = ai.analyse(maxDepth, nodeBudget);
       const lines = [];
-      for (let i = 0; i < count; i++) lines.push({ index: ai.analysis_move(i), score: ai.analysis_score(i) });
+      for (let i = 0; i < count; i++) {
+        const line = [];
+        for (let j = 0; ; j++) {
+          const square = ai.analysis_line(i, j);
+          if (square < 0) break;
+          line.push(square);
+        }
+        lines.push({ index: ai.analysis_move(i), score: ai.analysis_score(i), line });
+      }
       return Promise.resolve({ lines, depth: ai.analysis_depth(), ms: Math.round(performance.now() - started) });
     }
-    const index = ai.ai_suggest(AI_MAX_DEPTH, nodeBudget);
+    const index = ai.ai_suggest(maxDepth, nodeBudget);
     return Promise.resolve({ index, ms: Math.round(performance.now() - started) });
   }
   const id = ++engineRequestId;
   return new Promise(resolve => {
     engineRequests.set(id, resolve);
-    engineWorker.postMessage({ id, kind, moves, boardSize: BOARD_SIZE, maxDepth: AI_MAX_DEPTH, nodeBudget });
+    engineWorker.postMessage({ id, kind, moves, boardSize: BOARD_SIZE, maxDepth, nodeBudget });
   });
 }
 
-// Analysis mode: after every position change, score every move for the side
-// to move and show them as tappable chips, best first.
-function scoreText(score) {
-  if (score >= 1) return 'wins';
-  if (score <= -1) return 'loses';
-  return (score >= 0 ? '+' : '') + score.toFixed(2);
+// --- Analysis ----------------------------------------------------------------
+//
+// Scores are shown for Green (like lichess shows White), whoever is to move.
+function greenScore(score) {
+  return ai.current_player() === 0 ? score : -score;
 }
 
-function requestAnalysis() {
-  if (!ai || gameOver()) {
-    analysisEl.hidden = true;
-    return;
-  }
-  analysisEl.hidden = false;
+function scoreText(green) {
+  if (green >= 1) return 'Green wins';
+  if (green <= -1) return 'Red wins';
+  return (green >= 0 ? '+' : '') + green.toFixed(2);
+}
+
+// Keep analysing the current position with a doubling budget until the
+// depth or budget cap, the position changes, or the mode changes.
+function startAnalysis() {
+  analysisGeneration += 1;
+  const generation = analysisGeneration;
+  const inAnalysis = mode === 'analysis';
+  evalBar.hidden = !inAnalysis;
+  analysisEl.hidden = !inAnalysis || gameOver();
+  if (!inAnalysis || gameOver()) return;
   analysisEl.textContent = 'Analysing…';
+
   const snapshot = moveText();
-  askEngine('analyse').then(({ lines, depth }) => {
-    if (!analysisOn || moveText() !== snapshot || gameOver()) return;
-    renderAnalysis(lines, depth);
-  });
+  const step = budget => {
+    askEngine('analyse', ANALYSIS_MAX_DEPTH, budget).then(({ lines, depth }) => {
+      if (generation !== analysisGeneration || moveText() !== snapshot) return;   // position moved on
+      renderAnalysis(lines, depth);
+      const settled = lines.length === 0 || Math.abs(lines[0].score) >= 1;       // forced result found
+      if (!settled && depth < ANALYSIS_MAX_DEPTH && budget < ANALYSIS_MAX_BUDGET) step(budget * 2);
+    });
+  };
+  step(ANALYSIS_FIRST_BUDGET);
 }
 
 function renderAnalysis(lines, depth) {
+  const top = lines.slice(0, ANALYSIS_LINES);
+  const best = top.length ? greenScore(top[0].score) : 0;
+
+  // Eval bar: Green's share, forced wins fill it completely.
+  const clamped = Math.max(-1, Math.min(1, best));
+  evalFill.style.height = `${50 + 50 * clamped}%`;
+  evalText.textContent = scoreText(best);
+
+  // Candidate markers on the board, fading with the gap to the best move.
+  cells.forEach(cell => cell.textContent = '');
+  const toMove = ai.current_player();
+  top.forEach(({ index, score }) => {
+    const gap = Math.abs(top[0].score - score);
+    const mark = document.createElement('span');
+    mark.classList.add('mark', toMove === 0 ? 'green' : 'red');
+    mark.style.opacity = Math.max(0.3, 1 - gap * 5).toFixed(2);
+    mark.textContent = scoreText(greenScore(score));
+    cells[index].appendChild(mark);
+  });
+
+  // The lines, best first; tap one to play its first move.
   analysisEl.innerHTML = '';
   const heading = document.createElement('div');
-  heading.textContent = `${getColorName(ai.current_player())} to move, depth ${depth}. Tap a move to play it.`;
+  heading.textContent = `Depth ${depth} · ${getColorName(toMove)} to move · scores for Green`;
   analysisEl.appendChild(heading);
-  const chips = document.createElement('div');
-  chips.classList.add('chips');
-  lines.forEach(({ index, score }, i) => {
-    const chip = document.createElement('button');
-    chip.classList.add('chip');
-    if (i === 0) chip.classList.add('best');
-    chip.textContent = `${squareName(index)} ${scoreText(score)}`;
-    chip.addEventListener('click', () => onCellClick(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE));
-    chips.appendChild(chip);
+  top.forEach(({ index, score, line }) => {
+    const row = document.createElement('div');
+    row.classList.add('line');
+    const scoreEl = document.createElement('span');
+    scoreEl.classList.add('score');
+    scoreEl.textContent = scoreText(greenScore(score));
+    const movesEl = document.createElement('span');
+    movesEl.classList.add('moves');
+    const first = document.createElement('span');
+    first.classList.add('first');
+    first.textContent = squareName(index);
+    movesEl.appendChild(first);
+    movesEl.appendChild(document.createTextNode(' ' + line.slice(1).map(squareName).join(' ')));
+    row.append(scoreEl, movesEl);
+    row.addEventListener('click', () => onCellClick(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE));
+    analysisEl.appendChild(row);
   });
-  analysisEl.appendChild(chips);
-  cells.forEach(cell => cell.classList.remove('hint'));
-  if (lines.length) cells[lines[0].index].classList.add('hint');
 }
+
+// --- Playing -----------------------------------------------------------------
 
 // Ask the engine for the AI's move and play it, unless the game moved on meanwhile.
 function requestAIMove() {
@@ -259,7 +315,7 @@ function requestAIMove() {
   undoButton.disabled = true;
   redoButton.disabled = true;
   const snapshot = moveText();
-  askEngine().then(({ index, ms }) => {
+  askEngine('move', AI_MAX_DEPTH, AI_NODE_BUDGET).then(({ index, ms }) => {
     if (moveText() !== snapshot || !isAITurn() || index < 0) {
       render();                          // stale answer: the game changed while thinking
       return;
@@ -283,7 +339,7 @@ function onCellClick(row, col) {
 function onUndo() {
   if (!ai || isAITurn()) return;
   if (!ai.undo()) return;
-  if (playAgainstAI && ai.current_player() === aiPlayer) ai.undo();
+  if (mode === 'ai' && ai.current_player() === aiPlayer) ai.undo();
   render();
   if (isAITurn()) requestAIMove();     // never leave the game waiting on the AI
 }
@@ -291,7 +347,7 @@ function onUndo() {
 function onRedo() {
   if (!ai || isAITurn()) return;
   if (!ai.redo()) return;
-  if (playAgainstAI && ai.current_player() === aiPlayer && ai.redo_count() > 0) ai.redo();
+  if (mode === 'ai' && ai.current_player() === aiPlayer && ai.redo_count() > 0) ai.redo();
   render();
   if (isAITurn()) requestAIMove();
 }
@@ -311,7 +367,7 @@ function onHint() {
   if (!ai || isAITurn() || gameOver()) return;
   hintButton.disabled = true;
   const snapshot = moveText();
-  askEngine().then(({ index }) => {
+  askEngine('move', AI_MAX_DEPTH, AI_NODE_BUDGET).then(({ index }) => {
     hintButton.disabled = false;
     if (index < 0 || moveText() !== snapshot || gameOver()) return;
     cells.forEach(cell => cell.classList.remove('hint'));
@@ -375,6 +431,16 @@ function newGame() {
   if (isAITurn()) requestAIMove();     // the AI opens when it plays first
 }
 
+// Switch mode, keeping the current game (so a finished game can be analysed).
+function setMode(next) {
+  mode = next;
+  tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.mode === mode));
+  sideSelect.hidden = mode !== 'ai';
+  if (!ai) return;
+  render();
+  if (isAITurn()) requestAIMove();
+}
+
 function addLabel(text) {
   const label = document.createElement('div');
   label.classList.add('label');
@@ -403,27 +469,7 @@ function buildBoard() {
   }
 }
 
-aiToggle.addEventListener('change', () => {
-  playAgainstAI = aiToggle.checked;
-  leftOption.classList.toggle('active', !playAgainstAI);
-  rightOption.classList.toggle('active', playAgainstAI);
-  sideSelect.hidden = !playAgainstAI;
-  analysisSelect.hidden = playAgainstAI;   // analysis is for exploring lines over the board
-  if (playAgainstAI && analysisOn) {
-    analysisOn = false;
-    analysisToggle.checked = false;
-    analysisSelect.querySelector('.left').classList.add('active');
-    analysisSelect.querySelector('.right').classList.remove('active');
-  }
-  if (ai) newGame();
-});
-
-analysisToggle.addEventListener('change', () => {
-  analysisOn = analysisToggle.checked;
-  analysisSelect.querySelector('.left').classList.toggle('active', !analysisOn);
-  analysisSelect.querySelector('.right').classList.toggle('active', analysisOn);
-  if (ai) render();
-});
+tabs.forEach(tab => tab.addEventListener('click', () => setMode(tab.dataset.mode)));
 
 aiFirstBox.addEventListener('change', () => {
   aiPlayer = aiFirstBox.checked ? 0 : 1;

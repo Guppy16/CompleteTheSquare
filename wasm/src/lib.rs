@@ -35,8 +35,9 @@ struct Session {
     /// Search results kept for the whole session: the positions explored for
     /// one move are where the next search starts.
     tt: TranspositionTable,
-    /// Last `analyse` result: (square index, score for the side to move), best first.
-    analysis: Vec<(usize, f64)>,
+    /// Last `analyse` result, best first: (square index, score for the side
+    /// to move, expected continuation as square indices starting with the move).
+    analysis: Vec<(usize, f64, Vec<usize>)>,
     analysis_depth: u32,
 }
 
@@ -166,7 +167,14 @@ pub extern "C" fn analyse(max_depth: u32, node_budget: u32) -> u32 {
         }
         let (state, history) = (s.state(), s.keys());
         let (scores, depth) = search::analyse_position(&state, max_depth.max(1), node_budget as u64, &history, &mut s.tt);
-        s.analysis = scores.into_iter().map(|(bit, score)| (bit.trailing_zeros() as usize, score)).collect();
+        let analysis = scores
+            .into_iter()
+            .map(|(bit, score)| {
+                let line = search::table_line(&s.tt, &state, bit, 8);
+                (bit.trailing_zeros() as usize, score, line.into_iter().map(|b| b.trailing_zeros() as usize).collect())
+            })
+            .collect();
+        s.analysis = analysis;
         s.analysis_depth = depth;
         s.analysis.len() as u32
     })
@@ -174,12 +182,25 @@ pub extern "C" fn analyse(max_depth: u32, node_budget: u32) -> u32 {
 
 #[no_mangle]
 pub extern "C" fn analysis_move(i: u32) -> i32 {
-    SESSION.with(|s| s.borrow().analysis.get(i as usize).map_or(-1, |&(sq, _)| sq as i32))
+    SESSION.with(|s| s.borrow().analysis.get(i as usize).map_or(-1, |(sq, _, _)| *sq as i32))
 }
 
 #[no_mangle]
 pub extern "C" fn analysis_score(i: u32) -> f64 {
-    SESSION.with(|s| s.borrow().analysis.get(i as usize).map_or(0.0, |&(_, score)| score))
+    SESSION.with(|s| s.borrow().analysis.get(i as usize).map_or(0.0, |(_, score, _)| *score))
+}
+
+/// The `j`-th square of the `i`-th candidate's expected line (the line starts
+/// with the candidate move itself), or -1 past its end.
+#[no_mangle]
+pub extern "C" fn analysis_line(i: u32, j: u32) -> i32 {
+    SESSION.with(|s| {
+        s.borrow()
+            .analysis
+            .get(i as usize)
+            .and_then(|(_, _, line)| line.get(j as usize).copied())
+            .map_or(-1, |sq| sq as i32)
+    })
 }
 
 #[no_mangle]

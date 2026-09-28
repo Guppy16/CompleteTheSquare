@@ -20,7 +20,15 @@ onmessage = async (event) => {
     // Every legal move scored for the side to move, best first.
     const count = ai.analyse(maxDepth, nodeBudget);
     const lines = [];
-    for (let i = 0; i < count; i++) lines.push({ index: ai.analysis_move(i), score: ai.analysis_score(i) });
+    for (let i = 0; i < count; i++) {
+      const line = [];
+      for (let j = 0; ; j++) {
+        const square = ai.analysis_line(i, j);
+        if (square < 0) break;
+        line.push(square);
+      }
+      lines.push({ index: ai.analysis_move(i), score: ai.analysis_score(i), line });
+    }
     postMessage({ id, lines, depth: ai.analysis_depth(), ms: Math.round(performance.now() - started) });
     return;
   }

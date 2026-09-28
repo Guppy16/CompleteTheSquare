@@ -511,6 +511,25 @@ pub fn analyse_position(
     result
 }
 
+/// The continuation the table expects after playing `first` in `state`:
+/// follow stored best moves for up to `max_len` plies. Entries may have been
+/// overwritten, so the line can be shorter than that; fine for display.
+pub fn table_line(tt: &TranspositionTable, state: &State, first: Bit, max_len: usize) -> Vec<Bit> {
+    let t = tables();
+    let mut line = vec![first];
+    let (mut state, mut won) = play_move(t, first, state);
+    while won.is_none() && line.len() < max_len {
+        let (key, sym) = canonical_key(t, &state);
+        let Some(bit) = tt.get(key).filter(|e| e.best != 0).map(|e| 1 << t.sym_square[t.sym_inverse[sym]][bit_index(e.best)]) else { break };
+        if state.occupied() & bit != 0 {
+            break; // stale entry from a colliding position
+        }
+        line.push(bit);
+        (state, won) = play_move(t, bit, &state);
+    }
+    line
+}
+
 /// Score of every legal move for the side to move, best first (for analysis).
 pub fn root_scores(state: &State, depth: u32, history: &[u64]) -> Vec<(Bit, f64)> {
     let mut tt = TranspositionTable::new();

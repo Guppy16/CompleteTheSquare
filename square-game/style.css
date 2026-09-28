@@ -231,46 +231,71 @@ button[hidden] {
 
 /* Which side you take against the AI: same switch as the mode selector,
    a little smaller, and the knob goes red when the AI takes green's first move. */
-#side-select, #analysis-select {
-  margin: -6px 0 4px;
+#side-select {
+  margin: -4px 0 4px;
 }
 
-#side-select[hidden], #analysis-select[hidden], #analysis[hidden] {
+#side-select[hidden], #analysis[hidden] {
   display: none;
 }
 
-/* Analysis: every move scored for the side to move; tap one to play it. */
+/* Analysis panel: the top lines, best first, scores for Green like lichess's White. */
 #analysis {
   width: min(100%, var(--board-max));
   margin-top: 8px;
-  padding: 8px;
+  padding: 6px 8px;
   background: var(--surface);
   border-radius: 4px;
   font-size: 0.85rem;
   color: var(--muted);
   text-align: left;
-}
-
-#analysis .chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
-}
-
-#analysis .chip {
-  margin: 0;
-  padding: 6px 10px;
-  font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
+}
+
+#analysis .line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 2px;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+}
+
+#analysis .line:hover {
   background: var(--surface-2);
+}
+
+#analysis .score {
+  flex: 0 0 3.5em;
+  font-weight: 700;
   color: var(--text);
 }
 
-#analysis .chip.best {
-  background: var(--green);
-  color: #fff;
+#analysis .moves {
+  color: var(--text);
+  overflow-wrap: anywhere;
 }
+
+#analysis .moves .first {
+  font-weight: 700;
+}
+
+/* Candidate-move markers on the board: opacity shows the gap to the best move. */
+.cell .mark {
+  width: 72%;
+  height: 72%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #fff;
+  pointer-events: none;
+}
+
+.cell .mark.green { background: var(--green); }
+.cell .mark.red { background: var(--red); }
 
 .side-switch {
   width: 180px;
@@ -285,13 +310,89 @@ button[hidden] {
   background-color: var(--red);
 }
 
+/* Mode tabs: Over the Board / Against AI / Analysis */
 #mode-select {
-  margin-bottom: 16px;
   display: flex;
-  align-items: center;
   justify-content: center;
-  gap: 10px;
-  width: 100%;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding: 3px;
+  background: var(--surface-2);
+  border-radius: 22px;
+  max-width: 100%;
+}
+
+#mode-select .tab {
+  margin: 0;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+#mode-select .tab:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+}
+
+#mode-select .tab.active {
+  background: var(--green);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Board with the analysis eval bar to its left */
+#board-area {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 8px;
+  width: min(100%, var(--board-max));
+}
+
+#board-area #board {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#eval-bar {
+  position: relative;
+  width: 14px;
+  margin: 20px 0;
+  background: var(--red);
+  border-radius: 7px;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+#eval-bar[hidden] {
+  display: none;
+}
+
+#eval-fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: var(--green);
+  transition: height 0.3s;
+}
+
+#eval-text {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  text-align: center;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
 }
 
 .play-label {
