@@ -215,3 +215,24 @@ fn undo_and_redo() {
     reset();
     assert_eq!((undo(), redo(), move_count(), redo_count()), (0, 0, 0, 0));
 }
+
+#[test]
+fn symmetric_positions_share_a_key() {
+    use complete_the_square_ai::game::{canonical_key, transform, SYMMETRIES};
+    let t = tables();
+    let state = position(&[(0, 0), (1, 2), (2, 1)], &[(0, 3), (4, 4)], 1);
+    let (key, _) = canonical_key(t, &state);
+    for s in 0..SYMMETRIES {
+        let twin = State { boards: [transform(t, s, state.boards[0]), transform(t, s, state.boards[1])], current: 1 };
+        assert_eq!(canonical_key(t, &twin).0, key, "symmetry {s}");
+        // colours swapped, other side to move
+        let swapped = State { boards: [twin.boards[1], twin.boards[0]], current: 0 };
+        assert_eq!(canonical_key(t, &swapped).0, key, "symmetry {s} + colour swap");
+        // and the inverse really undoes the transform
+        let back = transform(t, t.sym_inverse[s], twin.boards[0]);
+        assert_eq!(back, state.boards[0], "inverse of symmetry {s}");
+    }
+    // A different position must not collide.
+    let other = position(&[(0, 0), (1, 2), (2, 2)], &[(0, 3), (4, 4)], 1);
+    assert_ne!(canonical_key(t, &other).0, key);
+}

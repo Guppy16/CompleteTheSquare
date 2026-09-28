@@ -235,6 +235,15 @@ the best move found. On a hit deep enough, the score is reused (with care: a sco
 during a cut-off is only a bound, see `Bound`). On any hit, the stored best move is tried
 first, which is better move ordering than the killer heuristic alone.
 
+The table key is the *canonical* form of the position: the smallest key among its 16
+equivalents, the 8 rotations and reflections of the board, each with and without the
+colours swapped (swapping colours and the side to move leaves the value for the side to
+move unchanged). A position and its mirror image therefore share one entry, and the stored
+best move is mapped back through the inverse symmetry on a hit. Cost: about 80 table
+lookups per node. Gain: the depth-7 reply to a centre opening dropped from 597k nodes to
+145k. The table lives in the `Session` for the whole game, so each search starts from what
+the previous one learned.
+
 `best_move_budget` searches depth 1, then 2, then 3, and so on, keeping the table between
 iterations, until a node budget is used up or a forced win is found. Each iteration starts
 with the previous one's best move, so the deeper searches prune very well, and the cost of

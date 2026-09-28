@@ -1,6 +1,6 @@
 //! Evaluation and negamax alpha-beta search. A direct port of `minimax.py`.
 
-use crate::game::{bit_index, index_to_square, play_move, tables, Bit, State, Tables, COLS, N, ROWS};
+use crate::game::{bit_index, canonical_key, index_to_square, play_move, tables, Bit, State, Tables, COLS, N, ROWS};
 use std::sync::OnceLock;
 
 pub const WIN_SCORE: f64 = 1.0;
@@ -318,10 +318,15 @@ pub fn negamax(s: &mut Search, state: &State, depth: u32, mut alpha: f64, mut be
         return s.draw_score(state);
     }
 
-    // Have we searched this position before, at least this deep?
+    // Have we searched this position (or one of its 16 symmetric twins)
+    // before, at least this deep? Table entries live in the canonical frame,
+    // so the stored best move is mapped back through the inverse symmetry.
+    let (tt_key, sym) = canonical_key(s.tables, state);
     let mut first = 0;
-    if let Some(e) = s.tt_get(key) {
-        first = e.best;
+    if let Some(e) = s.tt_get(tt_key) {
+        if e.best != 0 {
+            first = 1 << s.tables.sym_square[s.tables.sym_inverse[sym]][bit_index(e.best)];
+        }
         if e.depth >= depth {
             match e.bound {
                 Bound::Exact => return e.score,
@@ -362,7 +367,8 @@ pub fn negamax(s: &mut Search, state: &State, depth: u32, mut alpha: f64, mut be
 
     let bound = if best >= beta { Bound::Lower } else if best <= alpha_in { Bound::Upper } else { Bound::Exact };
     if !s.aborted {
-        s.tt_put(TtEntry { key, depth, score: best, bound, best: best_bit });
+        let best_canonical = if best_bit == 0 { 0 } else { 1 << s.tables.sym_square[sym][bit_index(best_bit)] };
+        s.tt_put(TtEntry { key: tt_key, depth, score: best, bound, best: best_canonical });
     }
     best
 }

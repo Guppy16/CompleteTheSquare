@@ -54,6 +54,59 @@ pub struct Tables {
     pub all_corner_masks: Vec<u32>,
     /// For each square: rays of bits walking away in each direction (len >= 2 only).
     pub capture_rays: Vec<Vec<Vec<Bit>>>,
+    /// Board symmetries (4 rotations, 4 reflections). sym_square[s][i] is
+    /// where square i lands under symmetry s; sym_rows[s][r][bits] is the
+    /// transformed bitboard of row r holding `bits`, so a whole board is
+    /// transformed with 5 lookups.
+    pub sym_square: Vec<[usize; N]>,
+    pub sym_rows: Vec<[[u32; 32]; ROWS]>,
+    /// sym_inverse[s] undoes symmetry s.
+    pub sym_inverse: [usize; SYMMETRIES],
+}
+
+pub const SYMMETRIES: usize = 8;
+
+/// Where (row, col) lands under symmetry `s` on a square board.
+fn symmetry(s: usize, r: usize, c: usize) -> (usize, usize) {
+    let n = ROWS - 1;
+    match s {
+        0 => (r, c),
+        1 => (c, n - r),         // rotate 90
+        2 => (n - r, n - c),     // rotate 180
+        3 => (n - c, r),         // rotate 270
+        4 => (r, n - c),         // mirror left-right
+        5 => (n - r, c),         // mirror top-bottom
+        6 => (c, r),             // transpose
+        _ => (n - c, n - r),     // anti-transpose
+    }
+}
+
+/// `board` seen through symmetry `s`.
+pub fn transform(t: &Tables, s: usize, board: u32) -> u32 {
+    let rows = &t.sym_rows[s];
+    let mut out = 0;
+    for (r, row) in rows.iter().enumerate() {
+        out |= row[(board >> (r * COLS)) as usize & 0b11111];
+    }
+    out
+}
+
+/// The smallest key among the 16 equivalent positions (8 board symmetries,
+/// with and without the colours swapped), and the symmetry that produced it.
+/// Swapping colours and the side to move leaves the position's value for the
+/// side to move unchanged, so all 16 can share one table entry.
+pub fn canonical_key(t: &Tables, state: &State) -> (u64, usize) {
+    let mut best = (u64::MAX, 0);
+    for s in 0..SYMMETRIES {
+        let (a, b) = (transform(t, s, state.boards[0]), transform(t, s, state.boards[1]));
+        let same = State { boards: [a, b], current: state.current }.key();
+        let swapped = State { boards: [b, a], current: 1 - state.current }.key();
+        let k = same.min(swapped);
+        if k < best.0 {
+            best = (k, s);
+        }
+    }
+    best
 }
 
 pub fn tables() -> &'static Tables {
@@ -100,7 +153,37 @@ fn build_tables() -> Tables {
             }
         }
     }
-    Tables { corner_masks, all_corner_masks, capture_rays }
+    // Symmetry tables (the board must be square for rotations to make sense).
+    assert_eq!(ROWS, COLS);
+    let mut sym_square = Vec::with_capacity(SYMMETRIES);
+    let mut sym_rows = Vec::with_capacity(SYMMETRIES);
+    for s in 0..SYMMETRIES {
+        let mut squares = [0; N];
+        for (i, sq) in squares.iter_mut().enumerate() {
+            let (r, c) = index_to_square(i);
+            let (r2, c2) = symmetry(s, r, c);
+            *sq = r2 * COLS + c2;
+        }
+        let mut rows = [[0u32; 32]; ROWS];
+        for (r, row) in rows.iter_mut().enumerate() {
+            for (bits, out) in row.iter_mut().enumerate() {
+                for c in 0..COLS {
+                    if bits & (1 << c) != 0 {
+                        *out |= 1 << squares[r * COLS + c];
+                    }
+                }
+            }
+        }
+        sym_square.push(squares);
+        sym_rows.push(rows);
+    }
+    let mut sym_inverse = [0; SYMMETRIES];
+    for (s, inv) in sym_inverse.iter_mut().enumerate() {
+        *inv = (0..SYMMETRIES)
+            .find(|&j| (0..N).all(|i| sym_square[j][sym_square[s][i]] == i))
+            .expect("every symmetry has an inverse");
+    }
+    Tables { corner_masks, all_corner_masks, capture_rays, sym_square, sym_rows, sym_inverse }
 }
 
 /// Remove opponent runs flanked between the played square and one of ours.
