@@ -47,7 +47,18 @@ class BitboardGame:
         config: GameConfig,
     ):
         self.config = config
+        rows, cols = config.rows, config.cols
+        self.num_squares = rows * cols
+        # Bitmask with every square set: used to turn "not occupied" into "empty".
+        self.full_mask = (1 << self.num_squares) - 1
+        # bit index -> (row, col), so we never have to divide/mod in the hot path.
+        self.index_to_square = [(i // cols, i % cols) for i in range(self.num_squares)]
         self.move_to_corner_masks = self._get_square_corner_bitmasks()
+        # Every distinct square-corner mask on the board (used by the evaluation).
+        self.all_corner_masks = sorted({m for ms in self.move_to_corner_masks.values() for m in ms})
+        # capture_rays[bit] = list of rays; each ray is the ordered list of bits
+        # walking away from that square in one of the 8 directions until the edge.
+        self.capture_rays = self._get_capture_rays()
 
     def new_game_state(self) -> BitboardState:
         """Create a new game state with all boards empty and player 0."""
@@ -75,19 +86,30 @@ class BitboardGame:
                 out += "."
         return out
 
-    def legal_moves(self, state: BitboardState) -> list[tuple]:
-        """Generate all legal moves for the current player."""
+    def empty_mask(self, state: BitboardState) -> int:
+        """Bitmask of every empty square (any set bit is a legal move)."""
+        return ~state.occupied & self.full_mask
 
-        moves = []
-        for row, col in product(range(self.config.rows), range(self.config.cols)):
-            position = self.square_to_bitboard((row, col))
-            if state.is_valid_move(position):
-                moves.append((row, col))
-        return moves
+    def iter_bits(self, mask: int):
+        """Yield each set bit of ``mask`` as its own single-bit integer."""
+        while mask:
+            bit = mask & -mask  # isolate the lowest set bit
+            yield bit
+            mask ^= bit  # clear it
+
+    def legal_moves(self, state: BitboardState) -> list[tuple]:
+        """Generate all legal moves for the current player as (row, col)."""
+        return [
+            self.index_to_square[bit.bit_length() - 1]
+            for bit in self.iter_bits(self.empty_mask(state))
+        ]
 
     def play_move(self, move: tuple, state: BitboardState):
-        """Play a move for a player."""
-        move_bitboard = self.square_to_bitboard(move)
+        """Play a move given as (row, col)."""
+        return self.play_move_bit(self.square_to_bitboard(move), state)
+
+    def play_move_bit(self, move_bitboard: int, state: BitboardState):
+        """Play a move given as a single-bit bitboard. Returns (new_state, won)."""
         assert state.is_valid_move(move_bitboard)
 
         player = state.current_player
@@ -96,12 +118,12 @@ class BitboardGame:
         # Update the board for the current player
         boards[player] |= move_bitboard
         # Check if the move captures any opponent pieces
-        boards = self.remove_pieces(move, boards, player)
+        boards = self.remove_pieces_bit(move_bitboard, boards, player)
 
         winner = self.get_winner(move_bitboard, player, boards[player])
 
         next_player = (player + 1) % self.config.players if not winner else player
-        new_state = replace(state, boards=tuple(boards), current_player=next_player)
+        new_state = BitboardState(tuple(boards), next_player)
 
         return new_state, winner
 
@@ -158,28 +180,56 @@ class BitboardGame:
             for mask in self.move_to_corner_masks[move_bitboard]
         )
 
-    def remove_pieces(self, move: tuple, boards: list[int], player: int):
-        """Efficiently remove captured opponent pieces in all directions."""
-        row, col = move
-        rows, cols = self.config.rows, self.config.cols
+    def _get_capture_rays(self) -> dict[int, list[list[int]]]:
+        """For every square, precompute the 8 rays of bits leading away from it.
 
-        for opponent in set(range(self.config.players)) - {player}:
+        Rays of length < 2 are dropped: a capture needs at least one opponent
+        piece plus one of our own beyond it, so shorter rays can never capture.
+        """
+        rows, cols = self.config.rows, self.config.cols
+        rays: dict[int, list[list[int]]] = {}
+        for row, col in product(range(rows), range(cols)):
+            square_rays = []
             for dr, dc in DIRECTIONS:
-                captured_mask = 0
+                ray = []
                 r, c = row + dr, col + dc
                 while 0 <= r < rows and 0 <= c < cols:
-                    bit = self.square_to_bitboard((r, c))
-                    if boards[opponent] & bit:
-                        captured_mask |= bit
-                    elif boards[player] & bit:
-                        # Capture! Remove all at once
-                        # print(f"Player {player} captures pieces on move {row},{col}")
-                        boards[opponent] &= ~captured_mask
-                        break
-                    else:
-                        break
+                    ray.append(self.square_to_bitboard((r, c)))
                     r += dr
                     c += dc
+                if len(ray) >= 2:
+                    square_rays.append(ray)
+            rays[self.square_to_bitboard((row, col))] = square_rays
+        return rays
+
+    def remove_pieces(self, move: tuple, boards: list[int], player: int):
+        """Remove captured opponent pieces after playing ``move`` (row, col)."""
+        return self.remove_pieces_bit(self.square_to_bitboard(move), boards, player)
+
+    def remove_pieces_bit(self, move_bitboard: int, boards: list[int], player: int):
+        """Remove captured opponent pieces in all directions.
+
+        A capture is a run of opponent pieces starting next to the played
+        square and ending at one of our own pieces, along any of the 8 rays.
+        """
+        own = boards[player]
+
+        for opponent in range(self.config.players):
+            if opponent == player:
+                continue
+            opp = boards[opponent]
+            for ray in self.capture_rays[move_bitboard]:
+                captured_mask = 0
+                for bit in ray:
+                    if opp & bit:
+                        captured_mask |= bit
+                    elif own & bit:
+                        # Flanked: remove every opponent piece we walked over.
+                        opp &= ~captured_mask
+                        break
+                    else:
+                        break  # empty square: no capture along this ray
+            boards[opponent] = opp
 
         return boards
 
