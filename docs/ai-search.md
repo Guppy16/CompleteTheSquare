@@ -311,6 +311,11 @@ functions, so the page needs no glue library:
 | `redo_count()`    | plies that `redo` can replay (cleared by `play`)                    |
 
 `square-game/script.js` fetches `ai.wasm`, calls `WebAssembly.instantiate`, and from then
-on only forwards clicks to `play`, calls `ai_play` on the AI's turn, and redraws the grid
-from `board(0)` and `board(1)`. `wasm/build.sh` rebuilds the module; the compiled file is
+on only forwards clicks to `play` and redraws the grid from `board(0)` and `board(1)`.
+
+The search itself runs in a Web Worker (`square-game/worker.js`) so the page never
+freezes while the AI thinks. The worker holds a second copy of the module: the page sends
+it the moves played so far, the worker replays them and answers with `ai_suggest`, and the
+page plays that square on its own copy. Answers that arrive after the game has moved on
+(undo, new game) are dropped. `wasm/build.sh` rebuilds the module; the compiled file is
 committed so GitHub Pages can serve it with no build step.

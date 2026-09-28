@@ -10,6 +10,7 @@ const BOARD_SIZE = 5;
 const AI_MAX_DEPTH = 12;
 const AI_NODE_BUDGET = 200000;
 const WASM_URL = 'square-game/ai.wasm';
+const WORKER_URL = 'square-game/worker.js';
 const COLOURS = ['W', 'B'];            // player 0 is green (W), player 1 is red (B)
 const COLUMN_LABELS = 'ABCDEFGHIJ';     // columns are lettered, rows numbered from the top
 
@@ -164,21 +165,55 @@ function logMoves() {
   console.log(moveText());
 }
 
-// Hand the move to the AI after the browser has painted the current position.
+// The search runs in a Web Worker so the page stays responsive. askEngine()
+// sends the moves played so far and resolves with the engine's chosen square
+// for the side to move. Falls back to searching on this thread if workers
+// are unavailable.
+const engineWorker = typeof Worker === 'undefined' ? null : new Worker(WORKER_URL);
+const engineRequests = new Map();       // request id -> resolve
+let engineRequestId = 0;
+
+if (engineWorker) {
+  engineWorker.onmessage = event => {
+    const resolve = engineRequests.get(event.data.id);
+    engineRequests.delete(event.data.id);
+    if (resolve) resolve(event.data);
+  };
+  engineWorker.onerror = err => console.error('engine worker failed:', err);
+}
+
+function askEngine() {
+  const moves = [];
+  for (let i = 0; i < ai.move_count(); i++) moves.push(ai.move_at(i));
+  if (!engineWorker) {
+    const started = performance.now();
+    const index = ai.ai_suggest(AI_MAX_DEPTH, AI_NODE_BUDGET);
+    return Promise.resolve({ index, ms: Math.round(performance.now() - started) });
+  }
+  const id = ++engineRequestId;
+  return new Promise(resolve => {
+    engineRequests.set(id, resolve);
+    engineWorker.postMessage({ id, moves, boardSize: BOARD_SIZE, maxDepth: AI_MAX_DEPTH, nodeBudget: AI_NODE_BUDGET });
+  });
+}
+
+// Ask the engine for the AI's move and play it, unless the game moved on meanwhile.
 function requestAIMove() {
   statusEl.textContent = 'AI is thinking…';
   boardEl.classList.add('thinking');
   undoButton.disabled = true;
   redoButton.disabled = true;
-  setTimeout(aiMove, 20);
-}
-
-function aiMove() {
-  const started = performance.now();
-  const index = ai.ai_play(AI_MAX_DEPTH, AI_NODE_BUDGET);
-  console.log(`AI played ${squareName(index)} in ${Math.round(performance.now() - started)} ms`);
-  logMoves();
-  render();
+  const snapshot = moveText();
+  askEngine().then(({ index, ms }) => {
+    if (moveText() !== snapshot || !isAITurn() || index < 0) {
+      render();                          // stale answer: the game changed while thinking
+      return;
+    }
+    ai.play(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE);
+    console.log(`AI played ${squareName(index)} in ${ms} ms`);
+    logMoves();
+    render();
+  });
 }
 
 function onCellClick(row, col) {
@@ -219,11 +254,15 @@ function onCopyMoves() {
 // Highlight the square the engine would play, without playing it.
 function onHint() {
   if (!ai || isAITurn() || gameOver()) return;
-  const index = ai.ai_suggest(AI_MAX_DEPTH, AI_NODE_BUDGET);
-  if (index < 0) return;
-  cells.forEach(cell => cell.classList.remove('hint'));
-  cells[index].classList.add('hint');
-  statusEl.innerHTML = createColoredStatus(ai.current_player()) + ` <small>(engine suggests ${squareName(index)})</small>`;
+  hintButton.disabled = true;
+  const snapshot = moveText();
+  askEngine().then(({ index }) => {
+    hintButton.disabled = false;
+    if (index < 0 || moveText() !== snapshot || gameOver()) return;
+    cells.forEach(cell => cell.classList.remove('hint'));
+    cells[index].classList.add('hint');
+    statusEl.innerHTML = createColoredStatus(ai.current_player()) + ` <small>(engine suggests ${squareName(index)})</small>`;
+  });
 }
 
 // "1. C3 A1  2. B2 D4" -> [[2, 2], [0, 0], [1, 1], [3, 3]] as [row, col]; null if malformed.
