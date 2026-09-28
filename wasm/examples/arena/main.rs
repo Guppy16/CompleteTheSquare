@@ -10,7 +10,7 @@
 //! of games at equal strength, so they measure the seat, not the engine.
 
 use complete_the_square_ai::game::{play_move, tables, State, N};
-use complete_the_square_ai::search::{best_move, best_move_budget};
+use complete_the_square_ai::search::{best_move, search_depth_reached, TranspositionTable};
 use std::time::Instant;
 
 const MAX_DEPTH: u32 = 12;
@@ -31,7 +31,9 @@ fn main() {
         seed as usize
     };
     let (mut red_wins, mut green_wins, mut draws, mut total_plies) = (0, 0, 0, 0);
+    let (mut red_nodes, mut red_moves) = (0u64, 0u64);
     for _ in 0..games {
+        let mut tt = TranspositionTable::new(); // persists for the game, as on the page
         let mut state = State::new();
         let mut history = vec![state.key()];
         let mut plies = 0;
@@ -45,7 +47,10 @@ fn main() {
                     best_move(&state, 5, &history).unwrap()
                 }
             } else {
-                best_move_budget(&state, MAX_DEPTH, NODE_BUDGET, &history).unwrap()
+                let (bit, _, nodes) = search_depth_reached(&state, MAX_DEPTH, NODE_BUDGET, &history, &mut tt);
+                red_nodes += nodes;
+                red_moves += 1;
+                bit.unwrap()
             };
             let (s, won) = play_move(t, bit, &state);
             state = s;
@@ -66,8 +71,9 @@ fn main() {
         }
     }
     println!(
-        "AI as red vs human-like green ({blunder_pct}% blunders): red {red_wins} / green {green_wins} / draws {draws} of {games}  (avg plies {:.0}, {:.0}s)",
+        "AI as red vs human-like green ({blunder_pct}% blunders): red {red_wins} / green {green_wins} / draws {draws} of {games}  (avg plies {:.0}, {:.0}s, {:.0}k nodes per AI move)",
         total_plies as f64 / games as f64,
-        start.elapsed().as_secs_f64()
+        start.elapsed().as_secs_f64(),
+        red_nodes as f64 / red_moves.max(1) as f64 / 1000.0
     );
 }

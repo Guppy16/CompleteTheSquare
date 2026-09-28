@@ -9,6 +9,7 @@ pub mod game;
 pub mod search;
 
 use game::{play_move, square_bit, tables, State, COLS, ROWS};
+use search::TranspositionTable;
 use std::cell::RefCell;
 
 /// A position occurring this many times ends the game as a draw (as in chess).
@@ -31,11 +32,14 @@ struct Session {
     plies: Vec<Ply>,
     /// Moves taken back, the most recently undone last.
     redo: Vec<Ply>,
+    /// Search results kept for the whole session: the positions explored for
+    /// one move are where the next search starts.
+    tt: TranspositionTable,
 }
 
 impl Session {
     fn new() -> Self {
-        Session { plies: Vec::new(), redo: Vec::new() }
+        Session { plies: Vec::new(), redo: Vec::new(), tt: TranspositionTable::new() }
     }
     fn state(&self) -> State {
         self.plies.last().map_or(State::new(), |p| p.state)
@@ -72,10 +76,15 @@ thread_local! {
     static SESSION: RefCell<Session> = RefCell::new(Session::new());
 }
 
-/// Start a new game (player 0 to move).
+/// Start a new game (player 0 to move). Keeps the transposition table: its
+/// entries describe positions, which stay valid across games.
 #[no_mangle]
 pub extern "C" fn reset() {
-    SESSION.with(|s| *s.borrow_mut() = Session::new());
+    SESSION.with(|s| {
+        let mut s = s.borrow_mut();
+        s.plies.clear();
+        s.redo.clear();
+    });
 }
 
 /// Bitboard of `player`'s pieces (bit `row * 5 + col`).
@@ -127,13 +136,16 @@ pub extern "C" fn play(row: u32, col: u32) -> u32 {
 /// it (a hint), or -1 if the game is over. Same search as `ai_play`.
 #[no_mangle]
 pub extern "C" fn ai_suggest(max_depth: u32, node_budget: u32) -> i32 {
-    let started = SESSION.with(|s| {
-        let s = s.borrow();
-        (!s.over()).then(|| (s.state(), s.keys()))
-    });
-    let Some((state, history)) = started else { return -1 };
-    search::best_move_budget(&state, max_depth.max(1), node_budget as u64, &history)
-        .map_or(-1, |bit| bit.trailing_zeros() as i32)
+    SESSION.with(|s| {
+        let mut s = s.borrow_mut();
+        if s.over() {
+            return -1;
+        }
+        let (state, history) = (s.state(), s.keys());
+        search::search_depth_reached(&state, max_depth.max(1), node_budget as u64, &history, &mut s.tt)
+            .0
+            .map_or(-1, |bit| bit.trailing_zeros() as i32)
+    })
 }
 
 /// Let the AI choose and play a move for the player to move. It searches
@@ -141,12 +153,15 @@ pub extern "C" fn ai_suggest(max_depth: u32, node_budget: u32) -> i32 {
 /// `max_depth` is reached. Returns the square index played, or -1 if none.
 #[no_mangle]
 pub extern "C" fn ai_play(max_depth: u32, node_budget: u32) -> i32 {
-    let started = SESSION.with(|s| {
-        let s = s.borrow();
-        (!s.over()).then(|| (s.state(), s.keys()))
+    let chosen = SESSION.with(|s| {
+        let mut s = s.borrow_mut();
+        if s.over() {
+            return None;
+        }
+        let (state, history) = (s.state(), s.keys());
+        search::search_depth_reached(&state, max_depth.max(1), node_budget as u64, &history, &mut s.tt).0
     });
-    let Some((state, history)) = started else { return -1 };
-    match search::best_move_budget(&state, max_depth.max(1), node_budget as u64, &history) {
+    match chosen {
         Some(bit) if play_bit(bit) == 1 => bit.trailing_zeros() as i32,
         _ => -1,
     }

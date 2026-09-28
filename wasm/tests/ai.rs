@@ -87,7 +87,7 @@ fn alpha_beta_matches_plain_minimax() {
         if game_over {
             continue;
         }
-        let mut search = Search::new(&state, 3, &[]).without_tt();
+        let mut search = Search::new(&state, 3, &[], None);
         let expected = plain(&mut search, &state, 3, state.current, &mut Vec::new());
         search.path.clear(); // negamax pushes the root itself, as plain() does
         let actual = negamax(&mut search, &state, 3, f64::NEG_INFINITY, f64::INFINITY);
