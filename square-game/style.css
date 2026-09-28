@@ -47,8 +47,9 @@ h1 {
 
 #board {
   display: grid;
-  /* first column holds the row numbers, then one column per square */
-  grid-template-columns: auto repeat(var(--board-size), 1fr);
+  /* row numbers on the left, one column per square, and an equal empty
+     column on the right so the squares themselves sit centred */
+  grid-template-columns: auto repeat(var(--board-size), 1fr) auto;
   gap: var(--gap);
   width: min(100%, var(--board-max));
   margin: 20px auto;

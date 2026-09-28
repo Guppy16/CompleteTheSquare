@@ -333,6 +333,7 @@ function buildBoard() {
   cells.length = 0;
   addLabel('');
   for (let c = 0; c < BOARD_SIZE; c++) addLabel(COLUMN_LABELS[c]);
+  addLabel('');                        // right-hand spacer keeps the squares centred
   for (let r = 0; r < BOARD_SIZE; r++) {
     addLabel(String(r + 1));
     for (let c = 0; c < BOARD_SIZE; c++) {
@@ -343,6 +344,7 @@ function buildBoard() {
       boardEl.appendChild(cell);
       cells.push(cell);
     }
+    addLabel('');
   }
 }
 
