@@ -30,6 +30,10 @@ impl State {
     pub fn empty(&self) -> u32 {
         !self.occupied() & FULL_MASK
     }
+    /// Packs the position and side to move into one integer, for repetition checks.
+    pub fn key(&self) -> u64 {
+        (self.boards[0] as u64) | ((self.boards[1] as u64) << N) | ((self.current as u64) << (2 * N))
+    }
 }
 
 pub const fn square_bit(row: usize, col: usize) -> Bit {

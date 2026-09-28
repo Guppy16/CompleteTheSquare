@@ -31,10 +31,21 @@ h1 {
 
 #board {
   display: grid;
-  grid-template-columns: repeat(var(--board-size), 1fr);
+  /* first column holds the row numbers, then one column per square */
+  grid-template-columns: auto repeat(var(--board-size), 1fr);
   gap: var(--gap);
   width: min(100%, var(--board-max));
   margin: 20px auto;
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4em;
+  font-size: 0.85rem;
+  color: #999;
+  user-select: none;
 }
 
 #board.thinking {

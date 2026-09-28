@@ -213,7 +213,28 @@ Measured on the opening position (AI replying to a centre move), depth 5:
 | centre-first + killers | 60,000        | 0.4 s |
 | corner-first + killers | 35,000        | 0.25 s |
 
-## 7. Tuning knobs
+## 7. Repetition
+
+Captures let positions recur: one side blocks a threat by capturing, the other recaptures
+and renews the threat, and neither can deviate without losing. Left alone the search
+happily walks this loop, because each recapture looks like "gain a piece and threaten".
+
+Two rules handle it, borrowed from chess:
+
+- **In the search**, `Search.path` holds the keys of every position in the game so far plus
+  the current line. A position already in it can only lead to a draw, so `negamax` returns
+  a draw score instead of searching it. The draw is worth `-DRAW_CONTEMPT` to the AI and
+  `+DRAW_CONTEMPT` to the opponent, so the AI only repeats when every alternative scores
+  worse than that (it is losing anyway), and it expects the opponent to repeat whenever
+  that suits them.
+- **In the game**, `lib.rs` keeps the same history; when a position occurs for the third
+  time the game ends as a draw (`draw()` returns 1). The page warns after the second
+  occurrence.
+
+`State::key` packs both boards and the side to move into one `u64` so the check is a scan
+of a few dozen integers per node; it did not measurably change search time.
+
+## 8. Tuning knobs
 
 - `AI_DEPTH` in `square-game/script.js` (currently 7). Native timings for the AI's first
   reply: depth 7 about 100 ms, depth 8 about 400 ms, depth 9 about 3 s. Expect a phone to
@@ -221,8 +242,11 @@ Measured on the opening position (AI replying to a centre move), depth 5:
 - The three weights and `WIN_SCORE` at the top of `src/search.rs`. Keep the weights
   summing to less than `WIN_SCORE` so wins always dominate.
 - `Evaluator::move_order` if you want to experiment with other static orderings.
+- `DRAW_CONTEMPT` in `src/search.rs` (currently 0.2, about 20 pieces of material or one
+  and a half threats): how much worse than a draw a position must be before the AI will
+  repeat.
 
-## 8. The WebAssembly build
+## 9. The WebAssembly build
 
 `src/lib.rs` keeps one game in a thread-local `Session` and exports plain-integer
 functions, so the page needs no glue library:
@@ -234,6 +258,8 @@ functions, so the page needs no glue library:
 | `current_player()`| 0 or 1                                                             |
 | `winner()`        | winner's index, or -1 while the game runs                          |
 | `winning_mask()`  | corner mask of the completed square, for highlighting              |
+| `draw()`          | 1 once the game is drawn by threefold repetition                   |
+| `repetitions()`   | how many times the current position has occurred                   |
 | `play(row, col)`  | 1 if the move was applied, 0 if illegal or the game is over        |
 | `ai_play(depth)`  | choose and play a move for the side to move; returns its square index |
 

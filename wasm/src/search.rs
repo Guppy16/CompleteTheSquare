@@ -9,6 +9,10 @@ pub const W_MATERIAL: f64 = 0.25;
 pub const W_POSITION: f64 = 0.10;
 pub const W_THREATS: f64 = 0.15;
 pub const MAX_THREATS: i32 = 3;
+/// A repeated position counts as a draw. From the AI's side a draw scores
+/// -DRAW_CONTEMPT (and +DRAW_CONTEMPT for the opponent), so the AI only
+/// repeats when every alternative looks worse than this.
+pub const DRAW_CONTEMPT: f64 = 0.2;
 
 pub struct Evaluator {
     corner_mask: u32,
@@ -88,22 +92,57 @@ fn ordered_moves<'a>(ev: &'a Evaluator, empty: u32, killer: Bit) -> impl Iterato
     first.into_iter().chain(ev.move_order.iter().copied().filter(move |&b| b & empty != 0 && b != killer))
 }
 
-pub fn negamax(t: &Tables, ev: &Evaluator, state: &State, depth: u32, mut alpha: f64, beta: f64, killers: &mut [Bit]) -> f64 {
+/// Everything one search needs besides the position.
+pub struct Search {
+    pub tables: &'static Tables,
+    pub evaluator: &'static Evaluator,
+    /// The player the search is for (draw scores are relative to them).
+    pub root_player: usize,
+    /// Keys of every position so far: the game's history, then the current line.
+    pub path: Vec<u64>,
+    /// killers[depth] = the move that last caused a cut-off at that depth.
+    pub killers: Vec<Bit>,
+}
+
+impl Search {
+    pub fn new(root: &State, depth: u32, history: &[u64]) -> Self {
+        let mut path = history.to_vec();
+        if path.last() != Some(&root.key()) {
+            path.push(root.key());
+        }
+        Search { tables: tables(), evaluator: evaluator(), root_player: root.current, path, killers: vec![0; depth as usize + 1] }
+    }
+
+    /// Score of a draw for the player to move in `state`.
+    fn draw_score(&self, state: &State) -> f64 {
+        if state.current == self.root_player { -DRAW_CONTEMPT } else { DRAW_CONTEMPT }
+    }
+}
+
+pub fn negamax(s: &mut Search, state: &State, depth: u32, mut alpha: f64, beta: f64) -> f64 {
+    // A position we have already been through can only lead to a draw by
+    // repetition, whatever the evaluation says about it.
+    if s.path.contains(&state.key()) {
+        return s.draw_score(state);
+    }
     if depth == 0 {
-        return ev.evaluate(t, state);
+        return s.evaluator.evaluate(s.tables, state);
     }
     let empty = state.empty();
     if empty == 0 {
-        return 0.0;
+        return s.draw_score(state);
     }
+
+    s.path.push(state.key());
     let mut best = f64::NEG_INFINITY;
-    let moves: Vec<Bit> = ordered_moves(ev, empty, killers[depth as usize]).collect();
+    let moves: Vec<Bit> = ordered_moves(s.evaluator, empty, s.killers[depth as usize]).collect();
     for bit in moves {
-        let (child, won) = play_move(t, bit, state);
+        let (child, won) = play_move(s.tables, bit, state);
         if won.is_some() {
-            return WIN_SCORE + WIN_DEPTH_BONUS * depth as f64;
+            best = WIN_SCORE + WIN_DEPTH_BONUS * depth as f64;
+            break;
         }
-        let score = -negamax(t, ev, &child, depth - 1, -beta, -alpha, killers);
+        let score = -negamax(s, &child, depth - 1, -beta, -alpha);
         if score > best {
             best = score;
         }
@@ -111,29 +150,30 @@ pub fn negamax(t: &Tables, ev: &Evaluator, state: &State, depth: u32, mut alpha:
             alpha = best;
         }
         if alpha >= beta {
-            killers[depth as usize] = bit;
+            s.killers[depth as usize] = bit;
             break;
         }
     }
+    s.path.pop();
     best
 }
 
 /// The move bit the player to move should play, or None if the board is full.
-pub fn best_move(state: &State, depth: u32) -> Option<Bit> {
-    let (t, ev) = (tables(), evaluator());
+/// `history` holds the keys of the positions played so far (see `State::key`).
+pub fn best_move(state: &State, depth: u32, history: &[u64]) -> Option<Bit> {
+    let mut s = Search::new(state, depth, history);
     let empty = state.empty();
     let mut best_bit = None;
     let mut best_score = f64::NEG_INFINITY;
     let (mut alpha, beta) = (f64::NEG_INFINITY, f64::INFINITY);
-    let mut killers = vec![0; depth as usize + 1];
 
-    let moves: Vec<Bit> = ordered_moves(ev, empty, 0).collect();
+    let moves: Vec<Bit> = ordered_moves(s.evaluator, empty, 0).collect();
     for bit in moves {
-        let (child, won) = play_move(t, bit, state);
+        let (child, won) = play_move(s.tables, bit, state);
         if won.is_some() {
             return Some(bit);
         }
-        let score = -negamax(t, ev, &child, depth - 1, -beta, -alpha, &mut killers);
+        let score = -negamax(&mut s, &child, depth - 1, -beta, -alpha);
         if score > best_score {
             best_score = score;
             best_bit = Some(bit);
@@ -143,6 +183,6 @@ pub fn best_move(state: &State, depth: u32) -> Option<Bit> {
     best_bit
 }
 
-pub fn best_move_index(state: &State, depth: u32) -> Option<usize> {
-    best_move(state, depth).map(bit_index)
+pub fn best_move_index(state: &State, depth: u32, history: &[u64]) -> Option<usize> {
+    best_move(state, depth, history).map(bit_index)
 }

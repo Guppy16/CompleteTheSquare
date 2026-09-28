@@ -1,7 +1,7 @@
 //! Regression tests for the rules engine and the AI.  Run: cargo test --release
 
 use complete_the_square_ai::game::{play_move, square_bit, tables, State};
-use complete_the_square_ai::search::{best_move_index, evaluator, negamax, WIN_DEPTH_BONUS, WIN_SCORE};
+use complete_the_square_ai::search::{best_move_index, evaluator, negamax, Search, DRAW_CONTEMPT, WIN_DEPTH_BONUS, WIN_SCORE};
 
 fn position(p0: &[(usize, usize)], p1: &[(usize, usize)], current: usize) -> State {
     let bits = |sq: &[(usize, usize)]| sq.iter().fold(0, |m, &(r, c)| m | square_bit(r, c));
@@ -26,15 +26,22 @@ fn captures() {
 #[test]
 fn alpha_beta_matches_plain_minimax() {
     // Pruning and move ordering must never change the value of a position.
-    fn plain(state: &State, depth: u32) -> f64 {
+    // (Same rules as the real search: a repeated position is a draw worth
+    // -DRAW_CONTEMPT to the root player.)
+    fn plain(state: &State, depth: u32, root: usize, path: &mut Vec<u64>) -> f64 {
         let (t, ev) = (tables(), evaluator());
+        let draw = if state.current == root { -DRAW_CONTEMPT } else { DRAW_CONTEMPT };
+        if path.contains(&state.key()) {
+            return draw;
+        }
         if depth == 0 {
             return ev.evaluate(t, state);
         }
         let empty = state.empty();
         if empty == 0 {
-            return 0.0;
+            return draw;
         }
+        path.push(state.key());
         let mut best = f64::NEG_INFINITY;
         for i in 0..25 {
             let bit = 1 << i;
@@ -43,10 +50,12 @@ fn alpha_beta_matches_plain_minimax() {
             }
             let (child, won) = play_move(t, bit, state);
             if won.is_some() {
-                return WIN_SCORE + WIN_DEPTH_BONUS * depth as f64;
+                best = WIN_SCORE + WIN_DEPTH_BONUS * depth as f64;
+                break;
             }
-            best = best.max(-plain(&child, depth - 1));
+            best = best.max(-plain(&child, depth - 1, root, path));
         }
+        path.pop();
         best
     }
 
@@ -76,16 +85,17 @@ fn alpha_beta_matches_plain_minimax() {
         if game_over {
             continue;
         }
-        let expected = plain(&state, 3);
-        let mut killers = [0; 4];
-        let actual = negamax(t, evaluator(), &state, 3, f64::NEG_INFINITY, f64::INFINITY, &mut killers);
+        let expected = plain(&state, 3, state.current, &mut Vec::new());
+        let mut search = Search::new(&state, 3, &[]);
+        search.path.clear(); // negamax pushes the root itself, as plain() does
+        let actual = negamax(&mut search, &state, 3, f64::NEG_INFINITY, f64::INFINITY);
         assert!((expected - actual).abs() < 1e-12, "{state:?}: {expected} vs {actual}");
     }
 }
 
 #[test]
 fn ai_behaviour() {
-    let best = |s: State| best_move_index(&s, 5).map(|i| (i / 5, i % 5)).unwrap();
+    let best = |s: State| best_move_index(&s, 5, &[]).map(|i| (i / 5, i % 5)).unwrap();
     // Takes an immediate win.
     assert_eq!(best(position(&[(0, 0), (0, 2), (2, 0)], &[(4, 4), (4, 3), (3, 4)], 1)), (3, 3));
     // Blocks an immediate threat.
@@ -93,4 +103,35 @@ fn ai_behaviour() {
     // Replies to a centre opening with a corner (corners can never be captured).
     let reply = best(position(&[(2, 2)], &[], 1));
     assert!([(0, 0), (0, 4), (4, 0), (4, 4)].contains(&reply), "{reply:?}");
+}
+
+#[test]
+fn avoids_repetition_and_declares_threefold_draw() {
+    // Red threatens the 2x2 at (0,2),(0,3),(1,2),(1,3). Green must block at (1,2),
+    // which captures (1,3); red re-playing (1,3) captures (1,2) and restores the
+    // threat. Left alone, the two sides repeat forever.
+    let green = [(0, 0), (0, 1), (1, 4), (2, 2)];
+    let red = [(0, 2), (0, 3), (0, 4), (1, 1), (1, 3)];
+    let s1 = position(&green, &red, 0);
+    let (s2, _) = play_move(tables(), square_bit(1, 2), &s1); // green blocks and captures
+
+    // With the history in view, red should not walk into the repetition.
+    let choice = best_move_index(&s2, 7, &[s1.key(), s2.key()]).map(|i| (i / 5, i % 5)).unwrap();
+    assert_ne!(choice, (1, 3), "red repeated the position");
+
+    // The live game ends as a draw when the same position comes up a third time.
+    use complete_the_square_ai::{draw, play, reset, winner};
+    reset();
+    // Reach s2 (red to move) with no captures on the way.
+    for &(r, c) in &[(0, 0), (0, 2), (0, 1), (0, 3), (2, 2), (0, 4), (1, 4), (1, 1), (1, 2)] {
+        assert_eq!(play(r, c), 1);
+    }
+    // Red (1,3) captures (1,2) -> s1; green (1,2) captures (1,3) -> s2 again ...
+    // s2 has now occurred once; two more cycles make it three.
+    for (n, &(r, c)) in [(1, 3), (1, 2), (1, 3), (1, 2)].iter().enumerate() {
+        assert_eq!(play(r, c), 1, "move {n} refused");
+    }
+    assert_eq!(winner(), -1);
+    assert_eq!(draw(), 1, "threefold repetition should end the game");
+    assert_eq!(play(3, 3), 0, "no moves after the draw");
 }
