@@ -22,6 +22,7 @@ const playAgainButton = document.getElementById('play-again');
 const undoButton = document.getElementById('undo');
 const redoButton = document.getElementById('redo');
 const copyButton = document.getElementById('copy-moves');
+const pasteButton = document.getElementById('paste-moves');
 const moveListEl = document.getElementById('move-list');
 const aiToggle = document.getElementById('ai-toggle');
 const leftOption = document.querySelector('.switch-option.left');
@@ -143,6 +144,7 @@ function render() {
   undoButton.disabled = waiting || ai.move_count() === 0;
   redoButton.disabled = waiting || ai.redo_count() === 0;
   copyButton.disabled = ai.move_count() === 0;
+  pasteButton.disabled = waiting;
   renderMoves();
   boardEl.classList.remove('thinking');
 }
@@ -199,6 +201,42 @@ function onCopyMoves() {
   } else {
     fallbackCopy(text);
   }
+}
+
+// "1. C3 A1  2. B2 D4" -> [[2, 2], [0, 0], [1, 1], [3, 3]] as [row, col]; null if malformed.
+function parseMoves(text) {
+  const moves = [];
+  for (const token of text.trim().split(/\s+/)) {
+    if (token === '' || token.endsWith('.')) continue;     // skip move numbers
+    const col = COLUMN_LABELS.indexOf(token[0].toUpperCase());
+    const row = parseInt(token.slice(1), 10) - 1;
+    if (col < 0 || col >= BOARD_SIZE || !(row >= 0 && row < BOARD_SIZE)) return null;
+    moves.push([row, col]);
+  }
+  return moves;
+}
+
+// Start a new game from a pasted move list (the format "Copy moves" produces).
+function onPasteMoves() {
+  if (!ai || isAITurn()) return;
+  const text = window.prompt('Paste moves, e.g. "1. C3 A1  2. B2 D4":');
+  if (text === null) return;
+  const moves = parseMoves(text);
+  if (moves === null) {
+    statusEl.textContent = 'Could not read those moves.';
+    return;
+  }
+  ai.reset();
+  for (const [i, [row, col]] of moves.entries()) {
+    if (!ai.play(row, col)) {
+      render();
+      statusEl.textContent = `Move ${i + 1} (${squareName(row * BOARD_SIZE + col)}) is not legal here; stopped before it.`;
+      return;
+    }
+  }
+  render();
+  logMoves();
+  if (isAITurn()) requestAIMove();
 }
 
 // Without the clipboard API, select the list so the user can copy it, or show it in a prompt.
@@ -259,6 +297,7 @@ playAgainButton.addEventListener('click', () => {
 undoButton.addEventListener('click', onUndo);
 redoButton.addEventListener('click', onRedo);
 copyButton.addEventListener('click', onCopyMoves);
+pasteButton.addEventListener('click', onPasteMoves);
 
 async function loadAI() {
   const bytes = await (await fetch(WASM_URL)).arrayBuffer();
