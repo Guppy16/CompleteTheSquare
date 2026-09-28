@@ -156,7 +156,7 @@ button[hidden] {
 
 #move-list {
   width: min(100%, var(--board-max));
-  max-height: 9em;
+  max-height: 12em;
   overflow-y: auto;
   margin-top: 12px;
   padding: 6px 8px;
@@ -175,8 +175,8 @@ button[hidden] {
 
 #move-list:not(:empty) {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(7.5em, 1fr));
-  gap: 4px 8px;
+  grid-template-columns: 1fr;   /* one move per line */
+  gap: 4px;
   font-variant-numeric: tabular-nums;
 }
 
