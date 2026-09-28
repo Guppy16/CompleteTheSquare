@@ -224,6 +224,18 @@ button[hidden] {
   overflow-wrap: anywhere;
 }
 
+#ai-first-label {
+  font-size: 0.9rem;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+#ai-first-label input {
+  accent-color: var(--green);
+  vertical-align: middle;
+}
+
 #mode-select {
   margin-bottom: 16px;
   display: flex;

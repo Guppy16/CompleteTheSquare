@@ -15,6 +15,9 @@ const COLUMN_LABELS = 'ABCDEFGHIJ';     // columns are lettered, rows numbered f
 
 let ai = null;                         // the module's exports, once loaded
 let playAgainstAI = false;             // default: two humans, one screen
+let aiPlayer = 1;                      // which side the AI plays in AI mode (0 = green, first)
+const aiFirstBox = document.getElementById('ai-first');
+const aiFirstLabel = document.getElementById('ai-first-label');
 
 const boardEl = document.getElementById('board');
 const statusEl = document.getElementById('status');
@@ -52,7 +55,7 @@ function gameOver() {
 }
 
 function isAITurn() {
-  return playAgainstAI && !gameOver() && ai.current_player() === 1;
+  return playAgainstAI && !gameOver() && ai.current_player() === aiPlayer;
 }
 
 // Square index -> "C3": columns lettered, rows numbered from 1 at the top.
@@ -190,7 +193,7 @@ function onCellClick(row, col) {
 function onUndo() {
   if (!ai || isAITurn()) return;
   if (!ai.undo()) return;
-  if (playAgainstAI && ai.current_player() === 1) ai.undo();
+  if (playAgainstAI && ai.current_player() === aiPlayer) ai.undo();
   render();
   if (isAITurn()) requestAIMove();     // never leave the game waiting on the AI
 }
@@ -198,7 +201,7 @@ function onUndo() {
 function onRedo() {
   if (!ai || isAITurn()) return;
   if (!ai.redo()) return;
-  if (playAgainstAI && ai.current_player() === 1 && ai.redo_count() > 0) ai.redo();
+  if (playAgainstAI && ai.current_player() === aiPlayer && ai.redo_count() > 0) ai.redo();
   render();
   if (isAITurn()) requestAIMove();
 }
@@ -275,6 +278,7 @@ function fallbackCopy(text) {
 function newGame() {
   ai.reset();
   render();
+  if (isAITurn()) requestAIMove();     // the AI opens when it plays first
 }
 
 function addLabel(text) {
@@ -307,6 +311,12 @@ aiToggle.addEventListener('change', () => {
   playAgainstAI = aiToggle.checked;
   leftOption.classList.toggle('active', !playAgainstAI);
   rightOption.classList.toggle('active', playAgainstAI);
+  aiFirstLabel.hidden = !playAgainstAI;
+  if (ai) newGame();
+});
+
+aiFirstBox.addEventListener('change', () => {
+  aiPlayer = aiFirstBox.checked ? 0 : 1;
   if (ai) newGame();
 });
 
