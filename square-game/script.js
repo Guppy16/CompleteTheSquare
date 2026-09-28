@@ -102,10 +102,8 @@ function miniBoard(ply, lastMoves) {
 function renderMoves() {
   moveListEl.innerHTML = '';
   const count = ai.move_count();
-  if (count === 0) {
-    moveListEl.textContent = 'No moves yet';
-    return;
-  }
+  moveListEl.hidden = count === 0;     // nothing to show before the first move
+  if (count === 0) return;
   for (let i = 0; i < count; i += 2) {
     const plies = [i, i + 1].filter(p => p < count);
     const squares = plies.map(p => ai.move_at(p));

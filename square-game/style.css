@@ -169,6 +169,10 @@ button[hidden] {
   overflow-wrap: anywhere;
 }
 
+#move-list[hidden] {
+  display: none;
+}
+
 #move-list:not(:empty) {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(7.5em, 1fr));
