@@ -21,8 +21,12 @@
   <div id="board"></div>
   <p id="status"><span style="background-color: #4CAF5050; padding: 2px 8px; border-radius: 4px; text-shadow: 0 0 3px #4CAF5080;">Green</span> to move</p>
   <div id="controls">
+    <button id="undo" disabled>Undo</button>
+    <button id="redo" disabled>Redo</button>
+    <button id="copy-moves" disabled>Copy moves</button>
     <button id="play-again" hidden>Play Again</button>
   </div>
+  <div id="move-list" aria-label="Moves played"></div>
   <script src="square-game/script.js"></script>
 </body>
 </html>

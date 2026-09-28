@@ -90,12 +90,52 @@ button {
   border-radius: 4px;
 }
 
-button:hover {
+button:hover:not(:disabled) {
   background-color: #45a049;
+}
+
+button:disabled {
+  background-color: #bdbdbd;
+  cursor: not-allowed;
 }
 
 button[hidden] {
   display: none;
+}
+
+/* Undo / Redo / Copy moves / Play Again: one row that fits a 360px phone. */
+#controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  width: min(100%, var(--board-max));
+}
+
+#controls button {
+  margin-top: 8px;
+  padding: 10px 16px;
+}
+
+#move-list {
+  width: min(100%, var(--board-max));
+  max-height: 6.5em;
+  overflow-y: auto;
+  margin-top: 12px;
+  padding: 6px 8px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #444;
+  text-align: left;
+  background: #f7f7f7;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+
+#move-list .pair {
+  display: inline-block;
+  margin-right: 0.9em;
+  white-space: nowrap;
 }
 
 #status {
