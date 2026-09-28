@@ -318,6 +318,8 @@ functions, so the page needs no glue library:
 | `repetitions()`   | how many times the current position has occurred                   |
 | `play(row, col)`  | 1 if the move was applied, 0 if illegal or the game is over        |
 | `ai_play(max_depth, node_budget)` | choose and play a move for the side to move; returns its square index |
+| `ai_suggest(max_depth, node_budget)` | the same search without playing the move (Hint)          |
+| `analyse(max_depth, node_budget)` | score every legal move for the side to move; read with `analysis_move(i)`, `analysis_score(i)`, `analysis_depth()` |
 | `undo()` / `redo()` | take back / replay one ply; 1 if there was one. Undo clears a win or draw |
 | `move_count()`    | plies played so far; `move_at(i)` gives the i-th square index, -1 out of range |
 | `redo_count()`    | plies that `redo` can replay (cleared by `play`)                    |

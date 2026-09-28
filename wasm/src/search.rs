@@ -474,6 +474,43 @@ pub fn principal_variation(state: &State, depth: u32, history: &[u64]) -> Vec<Bi
     line
 }
 
+/// Analysis: every legal move scored for the side to move, best first, and
+/// the depth those scores are from. Iteratively deepened under a node budget
+/// like the normal search, but every root move gets an exact (full-window)
+/// score, so it costs several times more per depth.
+pub fn analyse_position(
+    state: &State,
+    max_depth: u32,
+    node_budget: u64,
+    history: &[u64],
+    tt: &mut TranspositionTable,
+) -> (Vec<(Bit, f64)>, u32) {
+    let mut s = Search::new(state, max_depth, history, Some(tt));
+    let mut result = (Vec::new(), 0);
+    for depth in 1..=max_depth.max(1) {
+        s.node_budget = if depth == 1 { u64::MAX } else { node_budget };
+        let mut scores = Vec::new();
+        for bit in ordered_moves(s.evaluator, state.empty(), 0, 0) {
+            let (child, won) = play_move(s.tables, bit, state);
+            let score = if won.is_some() {
+                WIN_SCORE + WIN_DEPTH_BONUS * depth as f64
+            } else {
+                -negamax(&mut s, &child, depth - 1, f64::NEG_INFINITY, f64::INFINITY)
+            };
+            scores.push((bit, score));
+        }
+        if s.aborted {
+            break;
+        }
+        scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        result = (scores, depth);
+        if s.nodes >= node_budget || result.0.first().map_or(true, |(_, sc)| sc.abs() >= WIN_SCORE) {
+            break;
+        }
+    }
+    result
+}
+
 /// Score of every legal move for the side to move, best first (for analysis).
 pub fn root_scores(state: &State, depth: u32, history: &[u64]) -> Vec<(Bit, f64)> {
     let mut tt = TranspositionTable::new();

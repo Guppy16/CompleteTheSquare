@@ -20,6 +20,16 @@
       </span>
     </label>
   </div>
+  <div id="analysis-select">
+    <label class="modern-switch side-switch">
+      <input type="checkbox" id="analysis-toggle">
+      <span class="switch-slider">
+        <span class="switch-option left active" data-text="Play"></span>
+        <span class="switch-option right" data-text="Analysis"></span>
+        <span class="switch-button"></span>
+      </span>
+    </label>
+  </div>
   <div id="side-select" hidden>
     <label class="modern-switch side-switch">
       <input type="checkbox" id="ai-first">
@@ -48,6 +58,7 @@
     </button>
     <button id="play-again" hidden>Play Again</button>
   </div>
+  <div id="analysis" hidden></div>
   <div id="move-list" aria-label="Moves played"></div>
   <script src="square-game/script.js"></script>
 </body>

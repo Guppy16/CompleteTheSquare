@@ -35,11 +35,14 @@ struct Session {
     /// Search results kept for the whole session: the positions explored for
     /// one move are where the next search starts.
     tt: TranspositionTable,
+    /// Last `analyse` result: (square index, score for the side to move), best first.
+    analysis: Vec<(usize, f64)>,
+    analysis_depth: u32,
 }
 
 impl Session {
     fn new() -> Self {
-        Session { plies: Vec::new(), redo: Vec::new(), tt: TranspositionTable::new() }
+        Session { plies: Vec::new(), redo: Vec::new(), tt: TranspositionTable::new(), analysis: Vec::new(), analysis_depth: 0 }
     }
     fn state(&self) -> State {
         self.plies.last().map_or(State::new(), |p| p.state)
@@ -146,6 +149,42 @@ pub extern "C" fn ai_suggest(max_depth: u32, node_budget: u32) -> i32 {
             .0
             .map_or(-1, |bit| bit.trailing_zeros() as i32)
     })
+}
+
+/// Analyse the current position: score every legal move for the side to move
+/// under the same kind of budget as `ai_play`. Returns how many moves were
+/// scored; read them with `analysis_move` / `analysis_score` (best first) and
+/// the depth with `analysis_depth`.
+#[no_mangle]
+pub extern "C" fn analyse(max_depth: u32, node_budget: u32) -> u32 {
+    SESSION.with(|s| {
+        let mut s = s.borrow_mut();
+        s.analysis.clear();
+        s.analysis_depth = 0;
+        if s.over() {
+            return 0;
+        }
+        let (state, history) = (s.state(), s.keys());
+        let (scores, depth) = search::analyse_position(&state, max_depth.max(1), node_budget as u64, &history, &mut s.tt);
+        s.analysis = scores.into_iter().map(|(bit, score)| (bit.trailing_zeros() as usize, score)).collect();
+        s.analysis_depth = depth;
+        s.analysis.len() as u32
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn analysis_move(i: u32) -> i32 {
+    SESSION.with(|s| s.borrow().analysis.get(i as usize).map_or(-1, |&(sq, _)| sq as i32))
+}
+
+#[no_mangle]
+pub extern "C" fn analysis_score(i: u32) -> f64 {
+    SESSION.with(|s| s.borrow().analysis.get(i as usize).map_or(0.0, |&(_, score)| score))
+}
+
+#[no_mangle]
+pub extern "C" fn analysis_depth() -> u32 {
+    SESSION.with(|s| s.borrow().analysis_depth)
 }
 
 /// Let the AI choose and play a move for the player to move. It searches

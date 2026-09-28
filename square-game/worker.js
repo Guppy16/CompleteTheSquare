@@ -11,11 +11,19 @@ const ready = (async () => {
 })();
 
 onmessage = async (event) => {
-  const { id, moves, boardSize, maxDepth, nodeBudget } = event.data;
+  const { id, kind, moves, boardSize, maxDepth, nodeBudget } = event.data;
   await ready;
   ai.reset();
   for (const index of moves) ai.play(Math.floor(index / boardSize), index % boardSize);
   const started = performance.now();
+  if (kind === 'analyse') {
+    // Every legal move scored for the side to move, best first.
+    const count = ai.analyse(maxDepth, nodeBudget);
+    const lines = [];
+    for (let i = 0; i < count; i++) lines.push({ index: ai.analysis_move(i), score: ai.analysis_score(i) });
+    postMessage({ id, lines, depth: ai.analysis_depth(), ms: Math.round(performance.now() - started) });
+    return;
+  }
   const index = ai.ai_suggest(maxDepth, nodeBudget);
   postMessage({ id, index, ms: Math.round(performance.now() - started) });
 };

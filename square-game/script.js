@@ -19,6 +19,11 @@ let playAgainstAI = false;             // default: two humans, one screen
 let aiPlayer = 1;                      // which side the AI plays in AI mode (0 = green, first)
 const aiFirstBox = document.getElementById('ai-first');
 const sideSelect = document.getElementById('side-select');
+const analysisSelect = document.getElementById('analysis-select');
+const analysisToggle = document.getElementById('analysis-toggle');
+const analysisEl = document.getElementById('analysis');
+let analysisOn = false;                // over-the-board only: score every move after each position
+const ANALYSIS_NODE_BUDGET = 1500000;  // a few times the play budget; scores every move exactly
 
 const boardEl = document.getElementById('board');
 const statusEl = document.getElementById('status');
@@ -157,6 +162,7 @@ function render() {
   copyButton.disabled = ai.move_count() === 0;
   pasteButton.disabled = waiting;
   hintButton.disabled = waiting || over;
+  if (analysisOn) requestAnalysis(); else analysisEl.hidden = true;
   renderMoves();
   boardEl.classList.remove('thinking');
 }
@@ -182,19 +188,68 @@ if (engineWorker) {
   engineWorker.onerror = err => console.error('engine worker failed:', err);
 }
 
-function askEngine() {
+function askEngine(kind = 'move') {
   const moves = [];
   for (let i = 0; i < ai.move_count(); i++) moves.push(ai.move_at(i));
+  const nodeBudget = kind === 'analyse' ? ANALYSIS_NODE_BUDGET : AI_NODE_BUDGET;
   if (!engineWorker) {
     const started = performance.now();
-    const index = ai.ai_suggest(AI_MAX_DEPTH, AI_NODE_BUDGET);
+    if (kind === 'analyse') {
+      const count = ai.analyse(AI_MAX_DEPTH, nodeBudget);
+      const lines = [];
+      for (let i = 0; i < count; i++) lines.push({ index: ai.analysis_move(i), score: ai.analysis_score(i) });
+      return Promise.resolve({ lines, depth: ai.analysis_depth(), ms: Math.round(performance.now() - started) });
+    }
+    const index = ai.ai_suggest(AI_MAX_DEPTH, nodeBudget);
     return Promise.resolve({ index, ms: Math.round(performance.now() - started) });
   }
   const id = ++engineRequestId;
   return new Promise(resolve => {
     engineRequests.set(id, resolve);
-    engineWorker.postMessage({ id, moves, boardSize: BOARD_SIZE, maxDepth: AI_MAX_DEPTH, nodeBudget: AI_NODE_BUDGET });
+    engineWorker.postMessage({ id, kind, moves, boardSize: BOARD_SIZE, maxDepth: AI_MAX_DEPTH, nodeBudget });
   });
+}
+
+// Analysis mode: after every position change, score every move for the side
+// to move and show them as tappable chips, best first.
+function scoreText(score) {
+  if (score >= 1) return 'wins';
+  if (score <= -1) return 'loses';
+  return (score >= 0 ? '+' : '') + score.toFixed(2);
+}
+
+function requestAnalysis() {
+  if (!ai || gameOver()) {
+    analysisEl.hidden = true;
+    return;
+  }
+  analysisEl.hidden = false;
+  analysisEl.textContent = 'Analysing…';
+  const snapshot = moveText();
+  askEngine('analyse').then(({ lines, depth }) => {
+    if (!analysisOn || moveText() !== snapshot || gameOver()) return;
+    renderAnalysis(lines, depth);
+  });
+}
+
+function renderAnalysis(lines, depth) {
+  analysisEl.innerHTML = '';
+  const heading = document.createElement('div');
+  heading.textContent = `${getColorName(ai.current_player())} to move, depth ${depth}. Tap a move to play it.`;
+  analysisEl.appendChild(heading);
+  const chips = document.createElement('div');
+  chips.classList.add('chips');
+  lines.forEach(({ index, score }, i) => {
+    const chip = document.createElement('button');
+    chip.classList.add('chip');
+    if (i === 0) chip.classList.add('best');
+    chip.textContent = `${squareName(index)} ${scoreText(score)}`;
+    chip.addEventListener('click', () => onCellClick(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE));
+    chips.appendChild(chip);
+  });
+  analysisEl.appendChild(chips);
+  cells.forEach(cell => cell.classList.remove('hint'));
+  if (lines.length) cells[lines[0].index].classList.add('hint');
 }
 
 // Ask the engine for the AI's move and play it, unless the game moved on meanwhile.
@@ -353,7 +408,21 @@ aiToggle.addEventListener('change', () => {
   leftOption.classList.toggle('active', !playAgainstAI);
   rightOption.classList.toggle('active', playAgainstAI);
   sideSelect.hidden = !playAgainstAI;
+  analysisSelect.hidden = playAgainstAI;   // analysis is for exploring lines over the board
+  if (playAgainstAI && analysisOn) {
+    analysisOn = false;
+    analysisToggle.checked = false;
+    analysisSelect.querySelector('.left').classList.add('active');
+    analysisSelect.querySelector('.right').classList.remove('active');
+  }
   if (ai) newGame();
+});
+
+analysisToggle.addEventListener('change', () => {
+  analysisOn = analysisToggle.checked;
+  analysisSelect.querySelector('.left').classList.toggle('active', !analysisOn);
+  analysisSelect.querySelector('.right').classList.toggle('active', analysisOn);
+  if (ai) render();
 });
 
 aiFirstBox.addEventListener('change', () => {

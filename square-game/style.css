@@ -231,12 +231,45 @@ button[hidden] {
 
 /* Which side you take against the AI: same switch as the mode selector,
    a little smaller, and the knob goes red when the AI takes green's first move. */
-#side-select {
+#side-select, #analysis-select {
   margin: -6px 0 4px;
 }
 
-#side-select[hidden] {
+#side-select[hidden], #analysis-select[hidden], #analysis[hidden] {
   display: none;
+}
+
+/* Analysis: every move scored for the side to move; tap one to play it. */
+#analysis {
+  width: min(100%, var(--board-max));
+  margin-top: 8px;
+  padding: 8px;
+  background: var(--surface);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: left;
+}
+
+#analysis .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+#analysis .chip {
+  margin: 0;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+#analysis .chip.best {
+  background: var(--green);
+  color: #fff;
 }
 
 .side-switch {
