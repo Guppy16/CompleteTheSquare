@@ -111,6 +111,12 @@ fn ai_behaviour() {
     let red = [(4, 4), (4, 3), (1, 4)];
     let reply = best(position(&green, &red, 1));
     assert!([(3, 1), (3, 3)].contains(&reply), "{reply:?}");
+    // Triple threat (B4, C4, D4): every move leaves two, so block one of them
+    // rather than capturing elsewhere (E1 would take D1).
+    let green = [(0, 0), (0, 3), (1, 0), (1, 2), (2, 0), (2, 1), (2, 3), (3, 0), (4, 2)];
+    let red = [(0, 1), (0, 2), (1, 1), (4, 0)];
+    let reply = best(position(&green, &red, 1));
+    assert!([(3, 1), (3, 2), (3, 3)].contains(&reply), "{reply:?}");
 }
 
 #[test]

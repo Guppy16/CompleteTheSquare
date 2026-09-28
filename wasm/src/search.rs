@@ -71,6 +71,14 @@ impl Evaluator {
         t.all_corner_masks.iter().filter(|&&mask| theirs & mask == 0 && (mine & mask).count_ones() == 3).count()
     }
 
+    /// Bitmask of the empty squares where `mine` would complete a square.
+    pub fn winning_squares(&self, t: &Tables, mine: u32, theirs: u32) -> u32 {
+        t.all_corner_masks
+            .iter()
+            .filter(|&&mask| theirs & mask == 0 && (mine & mask).count_ones() == 3)
+            .fold(0, |acc, &mask| acc | (mask & !mine))
+    }
+
     fn threat_difference(&self, t: &Tables, mine: u32, theirs: u32) -> i32 {
         let mut diff = 0;
         for &mask in &t.all_corner_masks {
@@ -344,20 +352,26 @@ fn search_root(s: &mut Search, state: &State, depth: u32, first: Bit) -> Option<
 
 /// Every move loses. Alpha-beta only gives bounds for the non-best moves, so
 /// re-score them all with a full window (cheap: the table holds most of it)
-/// and pick the move that loses latest, then the one that leaves the
-/// opponent the fewest immediate wins, so a human still has to find them.
+/// and pick, in order: the move that loses latest; the one that leaves the
+/// opponent the fewest immediate wins; one that sits on an opponent's winning
+/// square (a visible block, which is what a human would do). So a human
+/// still has to find the remaining win.
 fn best_losing_move(s: &mut Search, state: &State, depth: u32) -> (Bit, f64) {
-    let mut best: Option<(Bit, f64, usize)> = None;
+    let (theirs, mine) = (state.boards[1 - state.current], state.boards[state.current]);
+    let their_wins = s.evaluator.winning_squares(s.tables, theirs, mine);
+    // (score, -threats left, blocks): larger is better
+    let mut best: Option<(Bit, (f64, i32, bool))> = None;
     for bit in ordered_moves(s.evaluator, state.empty(), 0, 0) {
         let (child, _) = play_move(s.tables, bit, state);
         let score = -negamax(s, &child, depth - 1, f64::NEG_INFINITY, f64::INFINITY);
-        let (mine, theirs) = (child.boards[child.current], child.boards[1 - child.current]);
-        let threats = s.evaluator.count_threats(s.tables, mine, theirs);
-        if best.map_or(true, |(_, b, t)| score > b || (score == b && threats < t)) {
-            best = Some((bit, score, threats));
+        let (c_mine, c_theirs) = (child.boards[child.current], child.boards[1 - child.current]);
+        let threats = s.evaluator.count_threats(s.tables, c_mine, c_theirs) as i32;
+        let rank = (score, -threats, bit & their_wins != 0);
+        if best.map_or(true, |(_, b)| rank > b) {
+            best = Some((bit, rank));
         }
     }
-    let (bit, score, _) = best.expect("a lost position still has legal moves");
+    let (bit, (score, _, _)) = best.expect("a lost position still has legal moves");
     (bit, score)
 }
 
