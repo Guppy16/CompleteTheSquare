@@ -451,24 +451,25 @@ pub fn book_move(state: &State) -> Option<Bit> {
     None
 }
 
-/// The line the engine expects after searching `state` to `depth`: follow the
-/// best move stored in the table from position to position.
+/// The line the engine expects after searching `state` to `depth`: the best
+/// move, then the best reply searched one ply shallower, and so on. (Walking
+/// stored best moves through the table is cheaper but the table is small and
+/// early entries get overwritten, so the line would be cut short.)
 pub fn principal_variation(state: &State, depth: u32, history: &[u64]) -> Vec<Bit> {
-    let mut tt = TranspositionTable::new();
     let t = tables();
-    let (first, _, _) = search_depth_reached(state, depth, u64::MAX, history, &mut tt);
+    let mut tt = TranspositionTable::new();
     let mut line = Vec::new();
     let mut state = *state;
-    let mut next = first;
-    while let Some(bit) = next {
+    let mut history = history.to_vec();
+    for remaining in (1..=depth).rev() {
+        let Some(bit) = search_depth_reached(&state, remaining, u64::MAX, &history, &mut tt).0 else { break };
         line.push(bit);
         let (child, won) = play_move(t, bit, &state);
-        if won.is_some() || line.len() >= depth as usize {
+        if won.is_some() {
             break;
         }
         state = child;
-        let (key, sym) = canonical_key(t, &state);
-        next = tt.get(key).filter(|e| e.best != 0).map(|e| 1 << t.sym_square[t.sym_inverse[sym]][bit_index(e.best)]);
+        history.push(state.key());
     }
     line
 }
