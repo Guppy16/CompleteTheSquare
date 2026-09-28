@@ -6,7 +6,7 @@
 //! Paste the text from the page's "Copy moves" button; move numbers are ignored.
 
 use complete_the_square_ai::game::{play_move, tables, State};
-use complete_the_square_ai::search::best_move;
+use complete_the_square_ai::search::{best_move, root_scores};
 
 fn parse(text: &str) -> Vec<u32> {
     text.split_whitespace()
@@ -62,4 +62,11 @@ fn main() {
         }
     }
     println!("{}", show(&state));
+    if state.empty() != 0 {
+        let side = if state.current == 0 { "G" } else { "R" };
+        println!("\n{side} to move; every move scored at depth {depth} (positive is good for {side}):");
+        for (bit, score) in root_scores(&state, depth, &history) {
+            println!("  {}  {score:+.3}", name(bit));
+        }
+    }
 }

@@ -66,6 +66,11 @@ impl Evaluator {
         t.all_corner_masks.iter().any(|&mask| theirs & mask == 0 && (mine & mask).count_ones() == 3)
     }
 
+    /// How many squares `mine` can complete next move.
+    pub fn count_threats(&self, t: &Tables, mine: u32, theirs: u32) -> usize {
+        t.all_corner_masks.iter().filter(|&&mask| theirs & mask == 0 && (mine & mask).count_ones() == 3).count()
+    }
+
     fn threat_difference(&self, t: &Tables, mine: u32, theirs: u32) -> i32 {
         let mut diff = 0;
         for &mask in &t.all_corner_masks {
@@ -331,7 +336,46 @@ fn search_root(s: &mut Search, state: &State, depth: u32, first: Bit) -> Option<
         }
         alpha = alpha.max(score);
     }
-    best
+    match best {
+        Some((_, score)) if score <= -WIN_SCORE => Some(best_losing_move(s, state, depth)),
+        other => other,
+    }
+}
+
+/// Every move loses. Alpha-beta only gives bounds for the non-best moves, so
+/// re-score them all with a full window (cheap: the table holds most of it)
+/// and pick the move that loses latest, then the one that leaves the
+/// opponent the fewest immediate wins, so a human still has to find them.
+fn best_losing_move(s: &mut Search, state: &State, depth: u32) -> (Bit, f64) {
+    let mut best: Option<(Bit, f64, usize)> = None;
+    for bit in ordered_moves(s.evaluator, state.empty(), 0, 0) {
+        let (child, _) = play_move(s.tables, bit, state);
+        let score = -negamax(s, &child, depth - 1, f64::NEG_INFINITY, f64::INFINITY);
+        let (mine, theirs) = (child.boards[child.current], child.boards[1 - child.current]);
+        let threats = s.evaluator.count_threats(s.tables, mine, theirs);
+        if best.map_or(true, |(_, b, t)| score > b || (score == b && threats < t)) {
+            best = Some((bit, score, threats));
+        }
+    }
+    let (bit, score, _) = best.expect("a lost position still has legal moves");
+    (bit, score)
+}
+
+/// Score of every legal move for the side to move, best first (for analysis).
+pub fn root_scores(state: &State, depth: u32, history: &[u64]) -> Vec<(Bit, f64)> {
+    let mut s = Search::new(state, depth, history);
+    let mut out = Vec::new();
+    for bit in ordered_moves(s.evaluator, state.empty(), 0, 0) {
+        let (child, won) = play_move(s.tables, bit, state);
+        let score = if won.is_some() {
+            WIN_SCORE + WIN_DEPTH_BONUS * depth as f64
+        } else {
+            -negamax(&mut s, &child, depth - 1, f64::NEG_INFINITY, f64::INFINITY)
+        };
+        out.push((bit, score));
+    }
+    out.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    out
 }
 
 /// Iterative deepening: search depth 1, 2, ... up to `max_depth`, stopping
