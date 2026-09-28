@@ -174,7 +174,9 @@ function requestAIMove() {
 }
 
 function aiMove() {
-  ai.ai_play(AI_MAX_DEPTH, AI_NODE_BUDGET);
+  const started = performance.now();
+  const index = ai.ai_play(AI_MAX_DEPTH, AI_NODE_BUDGET);
+  console.log(`AI played ${squareName(index)} in ${Math.round(performance.now() - started)} ms`);
   logMoves();
   render();
 }
