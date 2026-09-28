@@ -228,16 +228,27 @@ button[hidden] {
   overflow-wrap: anywhere;
 }
 
-#ai-first-label {
-  font-size: 0.9rem;
-  color: var(--muted);
-  cursor: pointer;
-  user-select: none;
+/* Which side you take against the AI: same switch as the mode selector,
+   a little smaller, and the knob goes red when the AI takes green's first move. */
+#side-select {
+  margin: -6px 0 4px;
 }
 
-#ai-first-label input {
-  accent-color: var(--green);
-  vertical-align: middle;
+#side-select[hidden] {
+  display: none;
+}
+
+.side-switch {
+  width: 180px;
+  height: 36px;
+}
+
+.side-switch .switch-option {
+  font-size: 12px;
+}
+
+.side-switch input:checked + .switch-slider .switch-button {
+  background-color: var(--red);
 }
 
 #mode-select {

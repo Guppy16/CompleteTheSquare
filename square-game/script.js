@@ -17,7 +17,7 @@ let ai = null;                         // the module's exports, once loaded
 let playAgainstAI = false;             // default: two humans, one screen
 let aiPlayer = 1;                      // which side the AI plays in AI mode (0 = green, first)
 const aiFirstBox = document.getElementById('ai-first');
-const aiFirstLabel = document.getElementById('ai-first-label');
+const sideSelect = document.getElementById('side-select');
 
 const boardEl = document.getElementById('board');
 const statusEl = document.getElementById('status');
@@ -309,12 +309,14 @@ aiToggle.addEventListener('change', () => {
   playAgainstAI = aiToggle.checked;
   leftOption.classList.toggle('active', !playAgainstAI);
   rightOption.classList.toggle('active', playAgainstAI);
-  aiFirstLabel.hidden = !playAgainstAI;
+  sideSelect.hidden = !playAgainstAI;
   if (ai) newGame();
 });
 
 aiFirstBox.addEventListener('change', () => {
   aiPlayer = aiFirstBox.checked ? 0 : 1;
+  sideSelect.querySelector('.left').classList.toggle('active', !aiFirstBox.checked);
+  sideSelect.querySelector('.right').classList.toggle('active', aiFirstBox.checked);
   if (ai) newGame();
 });
 
