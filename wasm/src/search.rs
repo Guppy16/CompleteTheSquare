@@ -421,6 +421,58 @@ fn best_losing_move(s: &mut Search, state: &State, depth: u32) -> (Bit, f64) {
     (bit, score)
 }
 
+/// Opening book: the reply to each distinct first move, found by searching to
+/// depth 14 offline (`examples/analyse.rs`), far deeper than the page can
+/// afford. Squares are indices (row * 5 + col) in the identity frame; the
+/// other 19 first moves are rotations/reflections of these six and are mapped
+/// through the symmetry tables. A `None` reply means "not computed yet".
+const OPENING_BOOK: [(usize, Option<usize>); 6] = [
+    (0, Some(6)),  // A1 -> B2  (C3, the search's own choice, loses in 13 plies)
+    (1, None),     // B1
+    (2, None),     // C1
+    (6, None),     // B2
+    (7, None),     // C2
+    (12, None),    // C3
+];
+
+/// The book's reply when `state` is one piece into the game, else None.
+pub fn book_move(state: &State) -> Option<Bit> {
+    if state.occupied().count_ones() != 1 {
+        return None;
+    }
+    let t = tables();
+    let square = bit_index(state.occupied());
+    for s in 0..crate::game::SYMMETRIES {
+        let canonical = t.sym_square[s][square];
+        if let Some(&(_, Some(reply))) = OPENING_BOOK.iter().find(|(first, _)| *first == canonical) {
+            return Some(1 << t.sym_square[t.sym_inverse[s]][reply]);
+        }
+    }
+    None
+}
+
+/// The line the engine expects after searching `state` to `depth`: follow the
+/// best move stored in the table from position to position.
+pub fn principal_variation(state: &State, depth: u32, history: &[u64]) -> Vec<Bit> {
+    let mut tt = TranspositionTable::new();
+    let t = tables();
+    let (first, _, _) = search_depth_reached(state, depth, u64::MAX, history, &mut tt);
+    let mut line = Vec::new();
+    let mut state = *state;
+    let mut next = first;
+    while let Some(bit) = next {
+        line.push(bit);
+        let (child, won) = play_move(t, bit, &state);
+        if won.is_some() || line.len() >= depth as usize {
+            break;
+        }
+        state = child;
+        let (key, sym) = canonical_key(t, &state);
+        next = tt.get(key).filter(|e| e.best != 0).map(|e| 1 << t.sym_square[t.sym_inverse[sym]][bit_index(e.best)]);
+    }
+    line
+}
+
 /// Score of every legal move for the side to move, best first (for analysis).
 pub fn root_scores(state: &State, depth: u32, history: &[u64]) -> Vec<(Bit, f64)> {
     let mut tt = TranspositionTable::new();
@@ -458,6 +510,9 @@ pub fn search_depth_reached(
     history: &[u64],
     tt: &mut TranspositionTable,
 ) -> (Option<Bit>, u32, u64) {
+    if let Some(bit) = book_move(state) {
+        return (Some(bit), 0, 0);
+    }
     let mut s = Search::new(state, max_depth, history, Some(tt));
     let mut best = None;
     let mut reached = 0;

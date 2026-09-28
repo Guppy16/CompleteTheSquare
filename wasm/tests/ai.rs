@@ -236,3 +236,14 @@ fn symmetric_positions_share_a_key() {
     let other = position(&[(0, 0), (1, 2), (2, 2)], &[(0, 3), (4, 4)], 1);
     assert_ne!(canonical_key(t, &other).0, key);
 }
+
+#[test]
+fn opening_book_replies_through_symmetry() {
+    use complete_the_square_ai::search::book_move;
+    // After A1 the book says B2; after the rotated opening E5 it must say the
+    // rotated reply D4. Two pieces on the board: no book move.
+    let reply = |s: State| book_move(&s).map(|b| (b.trailing_zeros() as usize / 5, b.trailing_zeros() as usize % 5));
+    assert_eq!(reply(position(&[(0, 0)], &[], 1)), Some((1, 1)));
+    assert_eq!(reply(position(&[(4, 4)], &[], 1)), Some((3, 3)));
+    assert_eq!(reply(position(&[(0, 0), (1, 1)], &[], 0)), None);
+}

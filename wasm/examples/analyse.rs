@@ -6,7 +6,7 @@
 //! Paste the text from the page's "Copy moves" button; move numbers are ignored.
 
 use complete_the_square_ai::game::{play_move, tables, State};
-use complete_the_square_ai::search::{best_move, root_scores};
+use complete_the_square_ai::search::{best_move, principal_variation, root_scores};
 
 fn parse(text: &str) -> Vec<u32> {
     text.split_whitespace()
@@ -70,5 +70,7 @@ fn main() {
         for (bit, score) in root_scores(&state, depth, &history) {
             println!("  {}  {score:+.3}", name(bit));
         }
+        let line: Vec<String> = principal_variation(&state, depth, &history).into_iter().map(name).collect();
+        println!("expected line: {}", line.join(" "));
     }
 }
