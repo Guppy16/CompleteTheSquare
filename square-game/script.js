@@ -76,8 +76,9 @@ function moveText() {
   return movePairs().join('  ');
 }
 
-// A tiny picture of the position after `ply` moves.
-function miniBoard(ply) {
+// A tiny picture of the position after `ply` half-moves, with the squares
+// of the plies in `lastMoves` outlined.
+function miniBoard(ply, lastMoves) {
   const mini = document.createElement('span');
   mini.classList.add('mini-board');
   const boards = [ai.board_at(ply, 0), ai.board_at(ply, 1)];
@@ -87,12 +88,14 @@ function miniBoard(ply) {
     boards.forEach((board, player) => {
       if (board & bit) cell.classList.add(`player-${COLOURS[player]}`);
     });
+    if (lastMoves.includes(i)) cell.classList.add('last');
     mini.appendChild(cell);
   }
   return mini;
 }
 
-// One entry per pair of moves: "3. C3 D4" followed by the position after them.
+// One entry per move (a pair of plies, one per side): "3. C3 D4" followed by
+// the position after them with those two squares outlined.
 function renderMoves() {
   moveListEl.innerHTML = '';
   const count = ai.move_count();
@@ -101,13 +104,18 @@ function renderMoves() {
     return;
   }
   for (let i = 0; i < count; i += 2) {
-    const last = Math.min(i + 2, count);
+    const plies = [i, i + 1].filter(p => p < count);
+    const squares = plies.map(p => ai.move_at(p));
+
     const pair = document.createElement('span');
     pair.classList.add('pair');
+    const number = document.createElement('span');
+    number.classList.add('num');
+    number.textContent = `${i / 2 + 1}.`;
     const text = document.createElement('span');
-    text.textContent = `${i / 2 + 1}. ${squareName(ai.move_at(i))}` + (last > i + 1 ? ` ${squareName(ai.move_at(i + 1))}` : '');
-    pair.appendChild(text);
-    pair.appendChild(miniBoard(last));
+    text.classList.add('plies');
+    text.textContent = squares.map(squareName).join(' ');
+    pair.append(number, text, miniBoard(plies.length + i, squares));
     moveListEl.appendChild(pair);
   }
 }

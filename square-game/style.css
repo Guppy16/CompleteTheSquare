@@ -150,12 +150,28 @@ button[hidden] {
   overflow-wrap: anywhere;
 }
 
+#move-list:not(:empty) {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7.5em, 1fr));
+  gap: 4px 8px;
+  font-variant-numeric: tabular-nums;
+}
+
 #move-list .pair {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  margin: 2px 12px 2px 0;
+  gap: 5px;
   white-space: nowrap;
+}
+
+#move-list .num {
+  min-width: 2.1em;
+  text-align: right;
+  color: #888;
+}
+
+#move-list .plies {
+  min-width: 3.4em;
 }
 
 /* Tiny picture of the position after each pair of moves. */
@@ -175,6 +191,7 @@ button[hidden] {
 
 .mini-board .player-W { background: #4CAF50; }
 .mini-board .player-B { background: #F44336; }
+.mini-board .last { box-shadow: inset 0 0 0 1px #222; }
 
 #status {
   font-size: 18px;
