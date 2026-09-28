@@ -123,6 +123,19 @@ pub extern "C" fn play(row: u32, col: u32) -> u32 {
     play_bit(square_bit(row as usize, col as usize))
 }
 
+/// The square index the AI would play for the side to move, without playing
+/// it (a hint), or -1 if the game is over. Same search as `ai_play`.
+#[no_mangle]
+pub extern "C" fn ai_suggest(max_depth: u32, node_budget: u32) -> i32 {
+    let started = SESSION.with(|s| {
+        let s = s.borrow();
+        (!s.over()).then(|| (s.state(), s.keys()))
+    });
+    let Some((state, history)) = started else { return -1 };
+    search::best_move_budget(&state, max_depth.max(1), node_budget as u64, &history)
+        .map_or(-1, |bit| bit.trailing_zeros() as i32)
+}
+
 /// Let the AI choose and play a move for the player to move. It searches
 /// deeper and deeper until `node_budget` positions have been visited or
 /// `max_depth` is reached. Returns the square index played, or -1 if none.

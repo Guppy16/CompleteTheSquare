@@ -22,6 +22,7 @@ const playAgainButton = document.getElementById('play-again');
 const undoButton = document.getElementById('undo');
 const redoButton = document.getElementById('redo');
 const copyButton = document.getElementById('copy-moves');
+const hintButton = document.getElementById('hint');
 const pasteButton = document.getElementById('paste-moves');
 const moveListEl = document.getElementById('move-list');
 const aiToggle = document.getElementById('ai-toggle');
@@ -145,6 +146,7 @@ function render() {
   redoButton.disabled = waiting || ai.redo_count() === 0;
   copyButton.disabled = ai.move_count() === 0;
   pasteButton.disabled = waiting;
+  hintButton.disabled = waiting || over;
   renderMoves();
   boardEl.classList.remove('thinking');
 }
@@ -201,6 +203,16 @@ function onCopyMoves() {
   } else {
     fallbackCopy(text);
   }
+}
+
+// Highlight the square the engine would play, without playing it.
+function onHint() {
+  if (!ai || isAITurn() || gameOver()) return;
+  const index = ai.ai_suggest(AI_MAX_DEPTH, AI_NODE_BUDGET);
+  if (index < 0) return;
+  cells.forEach(cell => cell.classList.remove('hint'));
+  cells[index].classList.add('hint');
+  statusEl.innerHTML = createColoredStatus(ai.current_player()) + ` <small>(engine suggests ${squareName(index)})</small>`;
 }
 
 // "1. C3 A1  2. B2 D4" -> [[2, 2], [0, 0], [1, 1], [3, 3]] as [row, col]; null if malformed.
@@ -298,6 +310,7 @@ undoButton.addEventListener('click', onUndo);
 redoButton.addEventListener('click', onRedo);
 copyButton.addEventListener('click', onCopyMoves);
 pasteButton.addEventListener('click', onPasteMoves);
+hintButton.addEventListener('click', onHint);
 
 async function loadAI() {
   const bytes = await (await fetch(WASM_URL)).arrayBuffer();

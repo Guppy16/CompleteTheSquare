@@ -65,6 +65,9 @@ h1 {
   -webkit-tap-highlight-color: transparent;
 }
 .cell.disabled { cursor: not-allowed; opacity: 0.8; }
+.cell.hint {
+  box-shadow: inset 0 0 0 3px #ff9900;
+}
 .cell.winner {
   box-shadow: 0 0 8px #ff9900;
   opacity: 1;
