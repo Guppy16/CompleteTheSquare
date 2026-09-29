@@ -1,6 +1,6 @@
 //! WebAssembly entry points. The module owns the whole game state; the page
-//! only calls `play` / `ai_play` / `undo` / `redo` and redraws from
-//! `board(0)`, `board(1)`.
+//! only calls `play` / `undo` / `redo` (and, in a worker, `ai_suggest` /
+//! `analyse` / `evaluate`) and redraws from `board(0)`, `board(1)`.
 //!
 //! Every export takes and returns plain integers, so no JS glue is needed
 //! beyond `WebAssembly.instantiate`.
@@ -88,6 +88,8 @@ pub extern "C" fn reset() {
         let mut s = s.borrow_mut();
         s.plies.clear();
         s.redo.clear();
+        s.analysis.clear();
+        s.analysis_depth = 0;
     });
 }
 

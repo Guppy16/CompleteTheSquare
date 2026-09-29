@@ -24,6 +24,15 @@ impl State {
     pub const fn new() -> Self {
         State { boards: [0; PLAYERS], current: 0 }
     }
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl State {
     pub fn occupied(&self) -> u32 {
         self.boards[0] | self.boards[1]
     }

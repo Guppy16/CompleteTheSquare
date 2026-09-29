@@ -21,3 +21,6 @@
 
 # Rust build output
 wasm/target/
+
+# Claude Code worktrees
+.claude/

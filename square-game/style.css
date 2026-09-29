@@ -278,10 +278,6 @@ button[hidden] {
   overflow-wrap: anywhere;
 }
 
-#analysis .moves .first {
-  font-weight: 700;
-}
-
 /* Candidate-move markers on the board: size and opacity show the gap to the
    best move; the book move gets a white outline. */
 .cell .mark.book {
@@ -439,11 +435,6 @@ button[hidden] {
   color: var(--muted);
   font-size: 0.8rem;
   min-width: 3em;
-}
-
-.play-label {
-  font-size: 16px;
-  font-weight: bold;
 }
 
 .modern-switch {
