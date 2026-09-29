@@ -322,14 +322,14 @@ functions, so the page needs no glue library:
 | `analyse(max_depth, node_budget)` | score every legal move for the side to move; read with `analysis_move(i)`, `analysis_score(i)`, `analysis_line(i, j)` (expected continuation), `analysis_depth()` |
 
 The page's Analysis tab calls `analyse` repeatedly with a doubling node budget (0.5M up to
-64M nodes, depth cap 12; about a minute on a phone) so the shown depth keeps rising while the position stands still,
-the way an engine panel on lichess does. The worker keeps its table between calls, so each
-deeper pass starts from the previous one's work. It shows the top three lines with their
-expected continuations, scores from Green's point of view, an eval bar, and markers on the
-board whose opacity fades with the gap to the best move.
-| `undo()` / `redo()` | take back / replay one ply; 1 if there was one. Undo clears a win or draw |
-| `move_count()`    | plies played so far; `move_at(i)` gives the i-th square index, -1 out of range |
-| `redo_count()`    | plies that `redo` can replay (cleared by `play`)                    |
+8M nodes, a few seconds in the browser) so the shown depth keeps rising while the position
+stands still; a "Go deeper" button continues for a few more seconds, the way lichess's
+engine panel works. The worker keeps its table between calls, so each deeper pass starts
+from the previous one's work. It shows the top three lines with their expected
+continuations (read from the table right after each candidate is searched, before its
+siblings can overwrite them), scores from Green's point of view, an eval bar, markers on the
+board whose opacity fades with the gap to the best move, and a score after every move of
+the game in the move list (`evaluate`, a quick search per position).
 
 `square-game/script.js` fetches `ai.wasm`, calls `WebAssembly.instantiate`, and from then
 on only forwards clicks to `play` and redraws the grid from `board(0)` and `board(1)`.

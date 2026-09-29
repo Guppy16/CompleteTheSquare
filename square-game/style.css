@@ -358,18 +358,27 @@ button[hidden] {
   min-width: 0;
 }
 
-#eval-bar {
-  position: relative;
-  width: 14px;
+/* Eval column to the right of the board: the bar, and the number under it. */
+#eval-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
   margin: 20px 0;
-  background: var(--red);
-  border-radius: 7px;
-  overflow: hidden;
   flex: 0 0 auto;
 }
 
-#eval-bar[hidden] {
+#eval-column[hidden] {
   display: none;
+}
+
+#eval-bar {
+  position: relative;
+  width: 14px;
+  flex: 1 1 auto;
+  background: var(--red);
+  border-radius: 7px;
+  overflow: hidden;
 }
 
 #eval-fill {
@@ -383,16 +392,37 @@ button[hidden] {
 }
 
 #eval-text {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 4px;
-  font-size: 9px;
+  font-size: 0.7rem;
   font-weight: 700;
-  color: #fff;
-  text-align: center;
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* The move just played (like lichess's last-move highlight). */
+.cell.last {
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.45);
+}
+
+/* Analysis panel header: depth on the left, Go deeper on the right. */
+#analysis .header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+#analysis .header button {
+  margin: 0;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+}
+
+/* Per-move scores in the move list. */
+#move-list .eval {
+  color: var(--muted);
+  font-size: 0.8rem;
+  min-width: 3em;
 }
 
 .play-label {

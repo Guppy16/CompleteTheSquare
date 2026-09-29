@@ -25,9 +25,13 @@
       </span>
     </label>
   </div>
+  <div id="analysis" hidden></div>
   <div id="board-area">
-    <div id="eval-bar" hidden title="Evaluation for Green"><div id="eval-fill"></div><span id="eval-text"></span></div>
     <div id="board"></div>
+    <div id="eval-column" hidden>
+      <div id="eval-bar" title="Evaluation for Green"><div id="eval-fill"></div></div>
+      <span id="eval-text"></span>
+    </div>
   </div>
   <p id="status"><span style="background-color: #4CAF5050; padding: 2px 8px; border-radius: 4px; text-shadow: 0 0 3px #4CAF5080;">Green</span> to move</p>
   <div id="controls">
@@ -46,7 +50,6 @@
     </button>
     <button id="play-again" hidden>Play Again</button>
   </div>
-  <div id="analysis" hidden></div>
   <div id="move-list" aria-label="Moves played"></div>
   <script src="square-game/script.js"></script>
 </body>

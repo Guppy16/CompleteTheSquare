@@ -32,6 +32,11 @@ onmessage = async (event) => {
     postMessage({ id, lines, depth: ai.analysis_depth(), ms: Math.round(performance.now() - started) });
     return;
   }
+  if (kind === 'evaluate') {
+    // Score of the replayed position for the side to move (for annotating moves).
+    postMessage({ id, score: ai.evaluate(maxDepth, nodeBudget), ms: Math.round(performance.now() - started) });
+    return;
+  }
   const index = ai.ai_suggest(maxDepth, nodeBudget);
   postMessage({ id, index, ms: Math.round(performance.now() - started) });
 };

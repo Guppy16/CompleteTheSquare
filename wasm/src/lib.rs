@@ -166,15 +166,11 @@ pub extern "C" fn analyse(max_depth: u32, node_budget: u32) -> u32 {
             return 0;
         }
         let (state, history) = (s.state(), s.keys());
-        let (scores, depth) = search::analyse_position(&state, max_depth.max(1), node_budget as u64, &history, &mut s.tt);
-        let analysis = scores
+        let (candidates, depth) = search::analyse_position(&state, max_depth.max(1), node_budget as u64, &history, &mut s.tt);
+        s.analysis = candidates
             .into_iter()
-            .map(|(bit, score)| {
-                let line = search::table_line(&s.tt, &state, bit, 8);
-                (bit.trailing_zeros() as usize, score, line.into_iter().map(|b| b.trailing_zeros() as usize).collect())
-            })
+            .map(|c| (c.bit.trailing_zeros() as usize, c.score, c.line.into_iter().map(|b| b.trailing_zeros() as usize).collect()))
             .collect();
-        s.analysis = analysis;
         s.analysis_depth = depth;
         s.analysis.len() as u32
     })
@@ -206,6 +202,23 @@ pub extern "C" fn analysis_line(i: u32, j: u32) -> i32 {
 #[no_mangle]
 pub extern "C" fn analysis_depth() -> u32 {
     SESSION.with(|s| s.borrow().analysis_depth)
+}
+
+/// Score of the current position for the side to move (a normal budgeted
+/// search, not the per-move analysis), for annotating a game's moves.
+/// 0 if the game is over.
+#[no_mangle]
+pub extern "C" fn evaluate(max_depth: u32, node_budget: u32) -> f64 {
+    SESSION.with(|s| {
+        let mut s = s.borrow_mut();
+        if s.over() {
+            return 0.0;
+        }
+        let (state, history) = (s.state(), s.keys());
+        search::best_move_scored(&state, max_depth.max(1), node_budget as u64, &history, &mut s.tt)
+            .0
+            .map_or(0.0, |(_, score)| score)
+    })
 }
 
 /// Let the AI choose and play a move for the player to move. It searches

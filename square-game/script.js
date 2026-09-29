@@ -11,14 +11,14 @@ const BOARD_SIZE = 5;
 const AI_MAX_DEPTH = 12;
 const AI_NODE_BUDGET = 400000;
 // Analysis: keep re-analysing with a doubling budget, like an engine that
-// keeps thinking, until the depth or budget cap is reached. The budget is
-// what bounds the time: 64M nodes is roughly half a minute on a laptop in
-// WebAssembly and about a minute on a phone. The worker keeps its table, so
-// each pass (and the analysis after the next move) builds on the last one.
+// keeps thinking, for a few seconds (ANALYSIS_BUDGET nodes); "Go deeper"
+// continues for another few seconds. The worker keeps its table, so each
+// pass (and the analysis after the next move) builds on the last one.
 const ANALYSIS_MAX_DEPTH = 12;
 const ANALYSIS_FIRST_BUDGET = 500000;
-const ANALYSIS_MAX_BUDGET = 64000000;
+const ANALYSIS_BUDGET = 8000000;       // roughly 3-5 s in the browser
 const ANALYSIS_LINES = 3;              // how many candidate lines to show
+const EVALUATE_BUDGET = 150000;        // per position, for the scores next to each move
 const WASM_URL = 'square-game/ai.wasm';
 const WORKER_URL = 'square-game/worker.js';
 const COLOURS = ['W', 'B'];            // player 0 is green (W), player 1 is red (B)
@@ -39,7 +39,7 @@ const hintButton = document.getElementById('hint');
 const pasteButton = document.getElementById('paste-moves');
 const moveListEl = document.getElementById('move-list');
 const analysisEl = document.getElementById('analysis');
-const evalBar = document.getElementById('eval-bar');
+const evalColumn = document.getElementById('eval-column');
 const evalFill = document.getElementById('eval-fill');
 const evalText = document.getElementById('eval-text');
 const sideSelect = document.getElementById('side-select');
@@ -131,6 +131,14 @@ function renderMoves() {
     text.classList.add('plies');
     text.textContent = squares.map(squareName).join(' ');
     pair.append(number, text, miniBoard(plies.length + i, squares));
+    // In analysis: the evaluation after this move, once the game has been scored.
+    const evalScore = gameScores.get(plies.length + i);
+    if (mode === 'analysis' && evalScore !== undefined) {
+      const evalEl = document.createElement('span');
+      evalEl.classList.add('eval');
+      evalEl.textContent = scoreText(evalScore);
+      pair.appendChild(evalEl);
+    }
     moveListEl.appendChild(pair);
   }
 }
@@ -152,6 +160,8 @@ function render() {
     if (over) cell.classList.add('disabled');
     if (winMask & bit) cell.classList.add('winner');
   });
+  const count = ai.move_count();
+  if (count > 0) cells[ai.move_at(count - 1)].classList.add('last');
 
   if (winner >= 0) {
     statusEl.innerHTML = createColoredStatus(winner, true);
@@ -202,6 +212,12 @@ if (engineWorker) {
 function askEngine(kind, maxDepth, nodeBudget) {
   const moves = [];
   for (let i = 0; i < ai.move_count(); i++) moves.push(ai.move_at(i));
+  return askEngineAt(moves, kind, maxDepth, nodeBudget);
+}
+
+// The same for the position after the given moves (used to score a whole
+// game). The fallback without a worker can only see the current position.
+function askEngineAt(moves, kind, maxDepth, nodeBudget) {
   if (!engineWorker) {
     const started = performance.now();
     if (kind === 'analyse') {
@@ -217,6 +233,9 @@ function askEngine(kind, maxDepth, nodeBudget) {
         lines.push({ index: ai.analysis_move(i), score: ai.analysis_score(i), line });
       }
       return Promise.resolve({ lines, depth: ai.analysis_depth(), ms: Math.round(performance.now() - started) });
+    }
+    if (kind === 'evaluate') {
+      return Promise.resolve({ score: ai.evaluate(maxDepth, nodeBudget), ms: Math.round(performance.now() - started) });
     }
     const index = ai.ai_suggest(maxDepth, nodeBudget);
     return Promise.resolve({ index, ms: Math.round(performance.now() - started) });
@@ -241,32 +260,62 @@ function scoreText(green) {
   return (green >= 0 ? '+' : '') + green.toFixed(2);
 }
 
-// Keep analysing the current position with a doubling budget until the
-// depth or budget cap, the position changes, or the mode changes.
+// A line as lichess writes it: "3. C3 D4 4. B1", or "3... D4 4. B1" when it
+// starts with the second player's move. `ply` is how many moves precede it.
+function lineText(squares, ply) {
+  const parts = [];
+  squares.forEach((square, i) => {
+    const p = ply + i;
+    if (p % 2 === 0) parts.push(`${p / 2 + 1}.`);
+    else if (i === 0) parts.push(`${Math.floor(p / 2) + 1}...`);
+    parts.push(squareName(square));
+  });
+  return parts.join(' ');
+}
+
+let analysisBudget = 0;                // budget of the last completed pass
+let analysisCap = ANALYSIS_BUDGET;     // "Go deeper" raises it
+let analysisRunning = false;
+
+// Analyse the current position with a doubling budget up to the cap, showing
+// each pass as it lands. Stops when the position or mode changes.
 function startAnalysis() {
   analysisGeneration += 1;
-  const generation = analysisGeneration;
   const inAnalysis = mode === 'analysis';
-  evalBar.hidden = !inAnalysis;
+  evalColumn.hidden = !inAnalysis;
   analysisEl.hidden = !inAnalysis || gameOver();
   if (!inAnalysis || gameOver()) return;
   analysisEl.textContent = 'Analysing…';
-
-  const snapshot = moveText();
-  const step = budget => {
-    askEngine('analyse', ANALYSIS_MAX_DEPTH, budget).then(({ lines, depth }) => {
-      if (generation !== analysisGeneration || moveText() !== snapshot) return;   // position moved on
-      renderAnalysis(lines, depth);
-      const settled = lines.length === 0 || Math.abs(lines[0].score) >= 1;       // forced result found
-      if (!settled && depth < ANALYSIS_MAX_DEPTH && budget < ANALYSIS_MAX_BUDGET) step(budget * 2);
-    });
-  };
-  step(ANALYSIS_FIRST_BUDGET);
+  analysisBudget = 0;
+  analysisCap = ANALYSIS_BUDGET;
+  continueAnalysis(ANALYSIS_FIRST_BUDGET);
+  evaluateGame();
 }
 
-function renderAnalysis(lines, depth) {
+function continueAnalysis(budget) {
+  const generation = analysisGeneration;
+  const snapshot = moveText();
+  analysisRunning = true;
+  askEngine('analyse', ANALYSIS_MAX_DEPTH, budget).then(({ lines, depth }) => {
+    if (generation !== analysisGeneration || moveText() !== snapshot) return;   // position moved on
+    analysisRunning = false;
+    analysisBudget = budget;
+    const settled = lines.length === 0 || Math.abs(lines[0].score) >= 1 || depth >= ANALYSIS_MAX_DEPTH;
+    renderAnalysis(lines, depth, settled);
+    if (!settled && budget < analysisCap) continueAnalysis(budget * 2);
+  });
+}
+
+function goDeeper() {
+  analysisCap = analysisBudget * 8;    // three more doublings: a few more seconds
+  if (!analysisRunning) continueAnalysis(analysisBudget * 2);
+}
+
+function renderAnalysis(lines, depth, settled) {
   const top = lines.slice(0, ANALYSIS_LINES);
   const best = top.length ? greenScore(top[0].score) : 0;
+  const ply = ai.move_count();
+  const toMove = ai.current_player();
 
   // Eval bar: Green's share, forced wins fill it completely.
   const clamped = Math.max(-1, Math.min(1, best));
@@ -275,7 +324,6 @@ function renderAnalysis(lines, depth) {
 
   // Candidate markers on the board, fading with the gap to the best move.
   cells.forEach(cell => cell.textContent = '');
-  const toMove = ai.current_player();
   top.forEach(({ index, score }) => {
     const gap = Math.abs(top[0].score - score);
     const mark = document.createElement('span');
@@ -285,11 +333,26 @@ function renderAnalysis(lines, depth) {
     cells[index].appendChild(mark);
   });
 
-  // The lines, best first; tap one to play its first move.
+  // Header: depth, and Go deeper once the automatic passes have finished.
   analysisEl.innerHTML = '';
-  const heading = document.createElement('div');
-  heading.textContent = `Depth ${depth} · ${getColorName(toMove)} to move · scores for Green`;
-  analysisEl.appendChild(heading);
+  const header = document.createElement('div');
+  header.classList.add('header');
+  const info = document.createElement('span');
+  info.textContent = `Depth ${depth} · ${getColorName(toMove)} to move`;
+  header.appendChild(info);
+  if (!settled && analysisBudget >= analysisCap) {
+    const deeper = document.createElement('button');
+    deeper.textContent = 'Go deeper';
+    deeper.addEventListener('click', goDeeper);
+    header.appendChild(deeper);
+  } else if (!settled) {
+    const thinking = document.createElement('span');
+    thinking.textContent = 'thinking…';
+    header.appendChild(thinking);
+  }
+  analysisEl.appendChild(header);
+
+  // The lines, best first, scores for Green; tap one to play its first move.
   top.forEach(({ index, score, line }) => {
     const row = document.createElement('div');
     row.classList.add('line');
@@ -298,15 +361,50 @@ function renderAnalysis(lines, depth) {
     scoreEl.textContent = scoreText(greenScore(score));
     const movesEl = document.createElement('span');
     movesEl.classList.add('moves');
-    const first = document.createElement('span');
-    first.classList.add('first');
-    first.textContent = squareName(index);
-    movesEl.appendChild(first);
-    movesEl.appendChild(document.createTextNode(' ' + line.slice(1).map(squareName).join(' ')));
+    movesEl.textContent = lineText(line, ply);
     row.append(scoreEl, movesEl);
     row.addEventListener('click', () => onCellClick(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE));
     analysisEl.appendChild(row);
   });
+}
+
+// Scores after each move of the game, for the move list (like lichess's
+// computer analysis). Cached by the move prefix so only new positions are
+// scored when the game grows; a quick search per position.
+const gameScores = new Map();          // ply -> score for Green after that many moves
+let gameScoresPrefix = [];             // the moves those scores belong to
+
+function evaluateGame() {
+  const moves = [];
+  for (let i = 0; i < ai.move_count(); i++) moves.push(ai.move_at(i));
+  // Keep cached scores while the game's moves still match.
+  let same = 0;
+  while (same < moves.length && same < gameScoresPrefix.length && moves[same] === gameScoresPrefix[same]) same++;
+  for (const ply of Array.from(gameScores.keys())) if (ply > same) gameScores.delete(ply);
+  gameScoresPrefix = moves;
+
+  const generation = analysisGeneration;
+  const pending = [];
+  for (let ply = 1; ply <= moves.length; ply++) if (!gameScores.has(ply)) pending.push(ply);
+  const next = () => {
+    if (generation !== analysisGeneration || pending.length === 0) return;
+    const ply = pending.shift();
+    if (ply === moves.length && gameOver()) {   // the final position needs no search
+      const winner = ai.winner();
+      gameScores.set(ply, winner < 0 ? 0 : winner === 0 ? 1 : -1);
+      renderMoves();
+      next();
+      return;
+    }
+    askEngineAt(moves.slice(0, ply), 'evaluate', AI_MAX_DEPTH, EVALUATE_BUDGET).then(({ score }) => {
+      if (generation !== analysisGeneration) return;
+      const toMove = ply % 2;          // after an odd number of moves, red is to move
+      gameScores.set(ply, toMove === 0 ? score : -score);
+      renderMoves();
+      next();
+    });
+  };
+  next();
 }
 
 // --- Playing -----------------------------------------------------------------

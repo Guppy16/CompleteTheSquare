@@ -17,7 +17,7 @@ pub const DRAW_CONTEMPT: f64 = 0.2;
 /// evaluation is never taken in the middle of a capture exchange.
 pub const QUIESCENCE_DEPTH: u32 = 4;
 /// Transposition table size (entries); a power of two.
-const TT_SIZE: usize = 1 << 16;
+const TT_SIZE: usize = 1 << 18; // 262k entries, 10 MB
 
 pub struct Evaluator {
     corner_mask: u32,
@@ -138,14 +138,22 @@ struct TtEntry {
     score: f64,
     bound: Bound,
     best: Bit,
+    /// Which search stored it (see `TranspositionTable::age`).
+    age: u32,
 }
 
-/// Positions already searched, keyed by `State::key`. Meant to live for the
-/// whole game: the positions explored while choosing one move are exactly
-/// the ones the next search starts from, so entries carry over. A fixed
-/// array indexed by a hash of the key; on a collision the newer entry wins.
+/// Positions already searched, keyed by the canonical `State::key`. Meant to
+/// live for the whole game: the positions explored while choosing one move
+/// are exactly the ones the next search starts from, so entries carry over.
+/// A fixed array indexed by a hash of the key. On a collision the slot is
+/// replaced if it is from an older search or searched less deep than the
+/// newcomer, so within one search the deep entries near the root (the ones
+/// worth keeping, and the ones the expected lines are read from) survive the
+/// churn of millions of shallow leaves.
 pub struct TranspositionTable {
     entries: Vec<TtEntry>,
+    /// Incremented for every new search; entries carry the age they were stored at.
+    age: u32,
 }
 
 impl Default for TranspositionTable {
@@ -156,8 +164,8 @@ impl Default for TranspositionTable {
 
 impl TranspositionTable {
     pub fn new() -> Self {
-        let empty = TtEntry { key: 0, depth: 0, score: 0.0, bound: Bound::Exact, best: 0 };
-        TranspositionTable { entries: vec![empty; TT_SIZE] }
+        let empty = TtEntry { key: 0, depth: 0, score: 0.0, bound: Bound::Exact, best: 0, age: 0 };
+        TranspositionTable { entries: vec![empty; TT_SIZE], age: 0 }
     }
 
     fn index(key: u64) -> usize {
@@ -168,10 +176,13 @@ impl TranspositionTable {
         self.entries.get(Self::index(key)).filter(|e| e.key == key)
     }
 
-    fn put(&mut self, entry: TtEntry) {
+    fn put(&mut self, mut entry: TtEntry) {
+        entry.age = self.age;
         let i = Self::index(entry.key);
         if let Some(slot) = self.entries.get_mut(i) {
-            *slot = entry;
+            if slot.key == entry.key || slot.age != self.age || entry.depth >= slot.depth {
+                *slot = entry;
+            }
         }
     }
 }
@@ -198,7 +209,10 @@ pub struct Search<'a> {
 
 impl<'a> Search<'a> {
     /// A search using `tt` (pass `None` for plain alpha-beta).
-    pub fn new(root: &State, depth: u32, history: &[u64], tt: Option<&'a mut TranspositionTable>) -> Self {
+    pub fn new(root: &State, depth: u32, history: &[u64], mut tt: Option<&'a mut TranspositionTable>) -> Self {
+        if let Some(t) = tt.as_deref_mut() {
+            t.age = t.age.wrapping_add(1); // entries from earlier searches become replaceable
+        }
         let mut path = history.to_vec();
         if path.last() != Some(&root.key()) {
             path.push(root.key());
@@ -368,7 +382,7 @@ pub fn negamax(s: &mut Search, state: &State, depth: u32, mut alpha: f64, mut be
     let bound = if best >= beta { Bound::Lower } else if best <= alpha_in { Bound::Upper } else { Bound::Exact };
     if !s.aborted {
         let best_canonical = if best_bit == 0 { 0 } else { 1 << s.tables.sym_square[sym][bit_index(best_bit)] };
-        s.tt_put(TtEntry { key: tt_key, depth, score: best, bound, best: best_canonical });
+        s.tt_put(TtEntry { key: tt_key, depth, score: best, bound, best: best_canonical, age: 0 });
     }
     best
 }
@@ -484,12 +498,12 @@ pub fn analyse_position(
     node_budget: u64,
     history: &[u64],
     tt: &mut TranspositionTable,
-) -> (Vec<(Bit, f64)>, u32) {
+) -> (Vec<Candidate>, u32) {
     let mut s = Search::new(state, max_depth, history, Some(tt));
     let mut result = (Vec::new(), 0);
     for depth in 1..=max_depth.max(1) {
         s.node_budget = if depth == 1 { u64::MAX } else { node_budget };
-        let mut scores = Vec::new();
+        let mut candidates = Vec::new();
         for bit in ordered_moves(s.evaluator, state.empty(), 0, 0) {
             let (child, won) = play_move(s.tables, bit, state);
             let score = if won.is_some() {
@@ -497,18 +511,28 @@ pub fn analyse_position(
             } else {
                 -negamax(&mut s, &child, depth - 1, f64::NEG_INFINITY, f64::INFINITY)
             };
-            scores.push((bit, score));
+            // Read the line now, before the siblings' searches can overwrite it.
+            let line = table_line(s.tt.as_deref().expect("analysis uses a table"), state, bit, 8);
+            candidates.push(Candidate { bit, score, line });
         }
         if s.aborted {
             break;
         }
-        scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-        result = (scores, depth);
-        if s.nodes >= node_budget || result.0.first().map_or(true, |(_, sc)| sc.abs() >= WIN_SCORE) {
+        candidates.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+        result = (candidates, depth);
+        if s.nodes >= node_budget || result.0.first().map_or(true, |c| c.score.abs() >= WIN_SCORE) {
             break;
         }
     }
     result
+}
+
+/// One analysed root move: its score for the side to move and the expected
+/// continuation, starting with the move itself.
+pub struct Candidate {
+    pub bit: Bit,
+    pub score: f64,
+    pub line: Vec<Bit>,
 }
 
 /// The continuation the table expects after playing `first` in `state`:
@@ -567,8 +591,21 @@ pub fn search_depth_reached(
     history: &[u64],
     tt: &mut TranspositionTable,
 ) -> (Option<Bit>, u32, u64) {
+    let (best, depth, nodes) = best_move_scored(state, max_depth, node_budget, history, tt);
+    (best.map(|(bit, _)| bit), depth, nodes)
+}
+
+/// As `search_depth_reached`, also returning the best move's score for the
+/// side to move. A book move is returned with a score of 0.
+pub fn best_move_scored(
+    state: &State,
+    max_depth: u32,
+    node_budget: u64,
+    history: &[u64],
+    tt: &mut TranspositionTable,
+) -> (Option<(Bit, f64)>, u32, u64) {
     if let Some(bit) = book_move(state) {
-        return (Some(bit), 0, 0);
+        return (Some((bit, 0.0)), 0, 0);
     }
     let mut s = Search::new(state, max_depth, history, Some(tt));
     let mut best = None;
@@ -590,7 +627,7 @@ pub fn search_depth_reached(
             _ => {}
         }
     }
-    (best.map(|(bit, _)| bit), reached, s.nodes)
+    (best, reached, s.nodes)
 }
 
 /// The move bit the player to move should play, searching exactly `depth`
