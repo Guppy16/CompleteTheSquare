@@ -244,6 +244,8 @@ pub struct Search<'a> {
     /// subtree contained one has a path-dependent value and is not stored in
     /// the table (see the note in `negamax`).
     repetition_hits: u64,
+    /// Table stores skipped because the subtree hit a repetition (statistics).
+    pub stores_skipped: u64,
 }
 
 impl<'a> Search<'a> {
@@ -266,6 +268,7 @@ impl<'a> Search<'a> {
             stop: None,
             aborted: false,
             repetition_hits: 0,
+            stores_skipped: 0,
         }
     }
 
@@ -448,6 +451,9 @@ pub fn negamax(s: &mut Search, state: &State, depth: u32, mut alpha: f64, mut be
     // this line: the same position reached another way is not a repetition.
     // Storing it would serve a "draw" where there is none, hiding a forced
     // result, so such nodes are not stored (chess engines' GHI problem).
+    if !s.aborted && s.repetition_hits != repetitions_before {
+        s.stores_skipped += 1;
+    }
     if !s.aborted && s.repetition_hits == repetitions_before {
         let best_canonical = if best_bit == 0 { 0 } else { 1 << s.tables.sym_square[sym][bit_index(best_bit)] };
         s.tt_put(TtEntry { key: tt_key, depth, score: best, bound, best: best_canonical, age: 0 });
