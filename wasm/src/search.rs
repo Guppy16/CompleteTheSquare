@@ -240,6 +240,10 @@ pub struct Search<'a> {
     stop: Option<&'a AtomicBool>,
     /// Set when the budget ran out mid-search; results after that are garbage.
     pub aborted: bool,
+    /// How many repetition draws have been returned so far. A node whose
+    /// subtree contained one has a path-dependent value and is not stored in
+    /// the table (see the note in `negamax`).
+    repetition_hits: u64,
 }
 
 impl<'a> Search<'a> {
@@ -261,6 +265,7 @@ impl<'a> Search<'a> {
             node_budget: u64::MAX,
             stop: None,
             aborted: false,
+            repetition_hits: 0,
         }
     }
 
@@ -379,6 +384,7 @@ pub fn negamax(s: &mut Search, state: &State, depth: u32, mut alpha: f64, mut be
     // A position we have already been through can only lead to a draw by
     // repetition, whatever the evaluation says about it.
     if s.path.contains(&key) {
+        s.repetition_hits += 1;
         return s.draw_score(state);
     }
     if depth == 0 {
@@ -410,6 +416,7 @@ pub fn negamax(s: &mut Search, state: &State, depth: u32, mut alpha: f64, mut be
         }
     }
     let alpha_in = alpha;
+    let repetitions_before = s.repetition_hits;
 
     s.path.push(key);
     let mut best = f64::NEG_INFINITY;
@@ -437,7 +444,11 @@ pub fn negamax(s: &mut Search, state: &State, depth: u32, mut alpha: f64, mut be
     s.path.pop();
 
     let bound = if best >= beta { Bound::Lower } else if best <= alpha_in { Bound::Upper } else { Bound::Exact };
-    if !s.aborted {
+    // A value that depends on a repetition somewhere below is only valid on
+    // this line: the same position reached another way is not a repetition.
+    // Storing it would serve a "draw" where there is none, hiding a forced
+    // result, so such nodes are not stored (chess engines' GHI problem).
+    if !s.aborted && s.repetition_hits == repetitions_before {
         let best_canonical = if best_bit == 0 { 0 } else { 1 << s.tables.sym_square[sym][bit_index(best_bit)] };
         s.tt_put(TtEntry { key: tt_key, depth, score: best, bound, best: best_canonical, age: 0 });
     }
