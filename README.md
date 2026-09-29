@@ -27,7 +27,7 @@ cd wasm
 cargo test --release                       # regression tests
 ./build.sh                                 # rebuild square-game/ai.wasm
 cargo run --release --example analyse -- "1. C3 A1  2. B2 D4"   # what the AI would have played
-cargo run --release --example arena -- human                    # win rate vs a human-like opponent
+cargo run --release --example arena -- 10 200                   # win rate vs a human-like opponent (10% blunders, 200 games)
 ```
 
 The compiled `ai.wasm` is committed, so the site needs no build step to deploy.

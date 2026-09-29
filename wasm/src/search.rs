@@ -243,6 +243,12 @@ impl<'a> Search<'a> {
     }
 
     /// Score of a draw for the player to move in `state`.
+    ///
+    /// Caveat: this is relative to the root player, but table entries are
+    /// keyed by position only (colour-swapped twins included) and persist
+    /// across searches for either side, so an entry on a repetition line can
+    /// carry the other side's sign of the contempt: an error of at most
+    /// 2 * DRAW_CONTEMPT, only on lines that repeat. Accepted for simplicity.
     fn draw_score(&self, state: &State) -> f64 {
         if state.current == self.root_player { -DRAW_CONTEMPT } else { DRAW_CONTEMPT }
     }

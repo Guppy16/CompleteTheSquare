@@ -4,7 +4,7 @@ The AI is a Rust crate in `wasm/`, compiled to WebAssembly and run in the browse
 
 - `src/game.rs` is the rules engine: board representation, legal moves, captures, win detection.
 - `src/search.rs` is the search: evaluation function, negamax with alpha-beta pruning, killer moves.
-- `src/lib.rs` holds the game state and exposes it to the page (section 8).
+- `src/lib.rs` holds the game state and exposes it to the page (section 10).
 
 It started life as Python (`bitboard.py` / `minimax.py`, see the git history), and the
 Rust is a line-for-line port, so the snippets below use whichever reads more clearly.
@@ -229,8 +229,8 @@ win, and a capture that completes a square is a win.
 
 ### Transposition table and iterative deepening
 
-The same position is reached by many move orders. `Search.tt` is a fixed-size table (65k
-entries) keyed by `State::key` that remembers the score, the depth it was searched to, and
+The same position is reached by many move orders. `Search.tt` is a fixed-size table (262k
+entries, 8 MB) keyed by `State::key` that remembers the score, the depth it was searched to, and
 the best move found. On a hit deep enough, the score is reused (with care: a score found
 during a cut-off is only a bound, see `Bound`). On any hit, the stored best move is tried
 first, which is better move ordering than the killer heuristic alone.
@@ -244,8 +244,8 @@ lookups per node. Gain: the depth-7 reply to a centre opening dropped from 597k 
 145k. The table lives in the `Session` for the whole game, so each search starts from what
 the previous one learned.
 
-`best_move_budget` searches depth 1, then 2, then 3, and so on, keeping the table between
-iterations, until a node budget is used up or a forced win is found. Each iteration starts
+`best_move_scored` (what the page's `ai_play`, `ai_suggest` and `evaluate` call) searches
+depth 1, then 2, then 3, and so on, keeping the table between iterations, until a node budget is used up or a forced win is found. Each iteration starts
 with the previous one's best move, so the deeper searches prune very well, and the cost of
 the shallow iterations is negligible. The page asks for a budget of 400k nodes and a
 maximum depth of 12; that is depth 7 or 8 in about 100 ms on a laptop.
@@ -276,7 +276,7 @@ of a few dozen integers per node; it did not measurably change search time.
 Only measure; intuition about evaluation terms was wrong more often than right (a
 "two corners owned" potential term looked sensible and lost). Two tools in `wasm/examples`:
 
-- `cargo run --release --example arena -- human` plays the AI as red against a human-like
+- `cargo run --release --example arena -- 10 200` plays the AI as red against a human-like
   green (engine moves with a percentage of random blunders) over hundreds of games and
   prints the win rate. That is the deployed situation. Pairwise engine-vs-engine matches
   turned out to be nearly useless here: from any short opening, the side to move wins over
@@ -309,17 +309,22 @@ functions, so the page needs no glue library:
 
 | export            | meaning                                                            |
 |-------------------|--------------------------------------------------------------------|
-| `reset()`         | new game, player 0 to move                                         |
+| `reset()`         | new game, player 0 to move (the table is kept)                     |
 | `board(p)`        | bitboard of player `p`'s pieces                                    |
+| `board_at(ply, p)`| the same after the first `ply` moves (for the move-list pictures)  |
 | `current_player()`| 0 or 1                                                             |
 | `winner()`        | winner's index, or -1 while the game runs                          |
 | `winning_mask()`  | corner mask of the completed square, for highlighting              |
 | `draw()`          | 1 once the game is drawn by threefold repetition                   |
 | `repetitions()`   | how many times the current position has occurred                   |
 | `play(row, col)`  | 1 if the move was applied, 0 if illegal or the game is over        |
-| `ai_play(max_depth, node_budget)` | choose and play a move for the side to move; returns its square index |
-| `ai_suggest(max_depth, node_budget)` | the same search without playing the move (Hint)          |
+| `undo()` / `redo()` | take back / replay one move; 1 if something happened             |
+| `move_count()`, `move_at(i)`, `redo_count()` | the move list and the redo stack         |
+| `ai_suggest(max_depth, node_budget)` | the square the engine would play (Hint, and the AI's move via the worker) |
+| `ai_play(max_depth, node_budget)` | as above but plays it too (kept for scripts; the page uses `ai_suggest` in the worker) |
 | `analyse(max_depth, node_budget)` | score every legal move for the side to move; read with `analysis_move(i)`, `analysis_score(i)`, `analysis_line(i, j)` (expected continuation), `analysis_depth()` |
+| `evaluate(max_depth, node_budget)` | the best move's score for the side to move (move-list annotations) |
+| `book_square()`   | the opening book's move for the position, or -1                    |
 
 The page's Analysis tab calls `analyse` repeatedly with a doubling node budget (0.5M up to
 8M nodes, a few seconds in the browser) so the shown depth keeps rising while the position
@@ -328,7 +333,7 @@ engine panel works. The worker keeps its table between calls, so each deeper pas
 from the previous one's work. It shows the top three lines with their expected
 continuations (read from the table right after each candidate is searched, before its
 siblings can overwrite them), scores from Green's point of view, an eval bar, markers on the
-board whose opacity fades with the gap to the best move, and a score after every move of
+board whose size and opacity shrink with the gap to the best move, and a score after every move of
 the game in the move list (`evaluate`, a quick search per position).
 
 `square-game/script.js` fetches `ai.wasm`, calls `WebAssembly.instantiate`, and from then
