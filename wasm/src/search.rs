@@ -512,7 +512,7 @@ const OPENING_BOOK: [(usize, Option<usize>); 6] = [
     (1, Some(0)),   // B1 -> A1  (-0.20; B2/D4 -0.27; E1, A5, D1, A2, A4 lose)
     (2, Some(0)),   // C1 -> A1  (-0.09, tied with E1)
     (6, Some(0)),   // B2 -> A1  (-0.09)
-    (7, None),      // C2: not computed yet
+    (7, Some(0)),   // C2 -> A1  (0.00, tied with E1; A4, E4, B5, D5 lose; A1/E1/B1 all 40/40 in play)
     (12, Some(0)),  // C3 -> A1  (see below)
 ];
 // Every entry is also validated by play (`examples/arena`), not just by its

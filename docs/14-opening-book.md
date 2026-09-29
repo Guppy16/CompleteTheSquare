@@ -23,7 +23,7 @@ const OPENING_BOOK: [(usize, Option<usize>); 6] = [
     (1, Some(0)),   // B1 -> A1  (-0.20; B2/D4 -0.27; E1, A5, D1, A2, A4 lose)
     (2, Some(0)),   // C1 -> A1  (-0.09, tied with E1)
     (6, Some(0)),   // B2 -> A1  (-0.09)
-    (7, None),      // C2: not computed yet
+    (7, Some(0)),   // C2 -> A1  (0.00, tied with E1; A1/E1/B1 all 40/40 in play)
     (12, Some(0)),  // C3 -> A1  (see below)
 ];
 
@@ -59,14 +59,17 @@ in 40 to 14. Bisecting to the entry and then playing 40 games from each reply se
 it: C5 won 13, A1 won 40. A 0.03 gap at depth 14 is evaluation noise; the corner is
 right. Every entry is now checked with the arena before it is trusted.
 
-## Adding the missing entry
+## Recomputing or extending an entry
 
 ```bash
-cd wasm && cargo run --release --example analyse -- "1. C2" 14   # 30 to 45 minutes idle
+cd wasm && cargo run --release --example analyse -- "1. C2" 14 16       # depth 14, 16 threads: minutes
+cargo run --release --example validate_reply -- C2 A1 E1 B1 40          # then validate by play
 ```
 
-Take the top replies, test each with a few dozen arena games from that opening, and add
-the winner to `OPENING_BOOK` as `(7, Some(square))`.
+Take the top replies from the first command, play them with the second, and put the one
+that wins in play into `OPENING_BOOK` as `(square, Some(reply))`. All six entries were
+made this way; C2's candidates A1, E1 and B1 each won 40 of 40, so the top-scoring
+corner was kept.
 
 ## Not a proof
 

@@ -54,14 +54,38 @@ same replacement policy as the single-threaded table applies (`should_replace`).
 
 Every thread runs the same iterative deepening on the same position over the shared
 table. To stop them doing identical work, odd-numbered threads start one ply deeper,
-and thread `i` uses the static move order rotated by `i`. They exchange discoveries
-through the table: when thread 3 finishes searching a subtree, thread 0 finds the
-result there and skips it. The first thread to complete the target depth, or to find a
-forced result, sets the stop flag; the others abort their current iteration (nothing
+each thread starts from a different root move (the previous iteration's best stays in
+front; the rest of the root order is rotated by the thread index), and the first few
+entries of the static order are nudged per thread. They exchange discoveries through
+the table: when thread 3 finishes searching a subtree, thread 0 finds the result there
+and skips it. The first thread to complete the target depth, or to find a forced
+result, sets the stop flag; the others abort their current iteration (nothing
 half-finished is stored), and the deepest completed result wins.
 
 It sounds too simple to work. It is what Stockfish does, and the reason it works is
 that the table *is* the search's memory: sharing it shares the work.
+
+Two things that did not work on the way: rotating the *whole* static order per thread
+made the high-numbered threads search in a bad order and prune badly, so 8 and 16
+threads were slower than 4; and with only that nudge and no root rotation, the threads
+duplicated each other and lazy SMP gained nothing at all.
+
+## Measured (16-core machine, position after 1. A1)
+
+| depth | threads | score every reply | single best move |
+|-------|---------|-------------------|------------------|
+| 11 | 1 | 27.7 s | 1.9 s |
+| 11 | 4 | 10.1 s | 1.7 s |
+| 11 | 16 | 4.0 s | 1.1 s |
+| 12 | 1 | 105.8 s | 5.6 s |
+| 12 | 16 | 14.0 s (7.5x) | 2.8 s (2x) |
+
+Root splitting scales well because the moves are independent; lazy SMP gains less
+because the threads overlap, which is normal for it. The scoring phase is the one that
+dominates the offline searches, so a depth-14 book entry now takes minutes rather than
+half an hour. Scores agree with the single-threaded search except on lines that repeat,
+where the contempt caveat of the [transposition table](09-transposition-table.md) can
+shift a value by a few hundredths.
 
 ## Root splitting: `root_scores_parallel`
 

@@ -36,11 +36,6 @@ The compiled `ai.wasm` is committed, so the site needs no build step to deploy.
 
 Open items, roughly in order of value.
 
-- **Opening book entry for C2.** The one first move without a depth-14 reply. About 30 to
-  45 minutes on an idle machine:
-  `cd wasm && cargo run --release --example analyse -- "1. C2" 14`, then validate the
-  candidate with the arena before adding it to `OPENING_BOOK` in `wasm/src/search.rs`
-  (the C3 entry showed a depth-14 score can be wrong in play).
 - **Is A1 a forced win?** Not at depth 14 (B2 and D4 hold). A definitive answer needs a
   solver rather than a depth-limited search; with the symmetry-keyed table this is plausible
   as an overnight run.
