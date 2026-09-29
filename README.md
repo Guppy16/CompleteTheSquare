@@ -36,10 +36,6 @@ The compiled `ai.wasm` is committed, so the site needs no build step to deploy.
 
 Open items, roughly in order of value.
 
-- **Click through the Analysis tab in a browser.** Nothing built on 29 Sep has been run in
-  a browser by the tooling: check the lines fill in and the depth climbs, "Go deeper"
-  appears after a few seconds, per-move scores populate in the move list, tapping a line
-  plays it, the panel stays put, and the eval bar and markers fit on a phone.
 - **Opening book entry for C2.** The one first move without a depth-14 reply. About 30 to
   45 minutes on an idle machine:
   `cd wasm && cargo run --release --example analyse -- "1. C2" 14`, then validate the
