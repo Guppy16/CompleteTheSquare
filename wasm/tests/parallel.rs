@@ -54,6 +54,7 @@ fn shared_table_never_returns_a_corrupt_entry() {
                         bound: Bound::Exact,
                         best: 1 << square,
                         age: 0,
+                        path_dependent: false,
                     });
                     let key = keys[xorshift(&mut seed) as usize % keys.len()];
                     if let Some(e) = table.get(key) {
@@ -72,7 +73,7 @@ fn shared_table_never_returns_a_corrupt_entry() {
 fn shared_table_roundtrip() {
     let table = SharedTable::new();
     table.bump_age();
-    let entry = TtEntry { key: 0xABCDEF, depth: 7, score: -0.375, bound: Bound::Upper, best: square_bit(3, 4), age: 0 };
+    let entry = TtEntry { key: 0xABCDEF, depth: 7, score: -0.375, bound: Bound::Upper, best: square_bit(3, 4), age: 0, path_dependent: false };
     table.put(entry);
     let back = table.get(0xABCDEF).expect("stored entry is readable");
     assert_eq!((back.depth, back.bound, back.best), (7, Bound::Upper, square_bit(3, 4)));

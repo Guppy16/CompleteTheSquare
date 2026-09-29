@@ -127,22 +127,29 @@ Depth-7 reply to a centre opening, node counts:
 Measured cost of a probe: about one node's worth of work (canonical key plus one array
 read). A hit at sufficient depth saves a whole subtree; a miss costs that one node.
 
-## Path-dependent values are not stored
+## Path-dependent values are stored but never trusted
 
 A position that is a repetition on the current line scores as a draw (see
 [Repetition](12-repetition.md)). That value belongs to the line, not the position: the
-same position reached by another move order is not a repetition there. Storing it would
-serve a "draw" where none exists, and that can hide a forced win or invent one. The
-search counts repetition hits, and a node whose subtree produced any is not stored:
+same position reached by another move order is not a repetition there. Serving it as an
+exact score would report a "draw" where none exists, and that can hide a forced win or
+invent one. The search counts repetition hits, and a node whose subtree produced any is
+stored with a `path_dependent` flag:
 
 ```rust
-if !s.aborted && s.repetition_hits == repetitions_before {
-    s.tt_put(...)
-}
+let path_dependent = s.repetition_hits != repetitions_before;
+s.tt_put(TtEntry { ..., path_dependent });
+// on a probe:
+if !e.path_dependent && e.depth >= depth { /* reuse the score or bound */ }
 ```
+
+The flagged entry's best move is still used, for ordering and for reading lines out of
+the table; its score is not. (The first fix skipped the store entirely, which was
+correct but left the root's children unstored in this capture-heavy game, since almost
+every big subtree contains some repetition, and the expected lines came out one move
+long.)
 
 This was found the hard way. Single-threaded, the stale draws were rare enough to pass
 as a small error; with sixteen threads sharing one table they were everywhere, and three
 searches of the same position gave three different answers, including a false "every
-reply loses". Chess engines call this the graph-history interaction problem; not storing
-is the standard cheap remedy.
+reply loses". Chess engines call this the graph-history interaction problem.

@@ -144,6 +144,9 @@ pub struct TtEntry {
     pub best: Bit,
     /// Which search stored it (see `Table::age`).
     pub age: u32,
+    /// The value came from a line that repeated, so it is only true on that
+    /// line: use the best move (ordering, lines) but never the score.
+    pub path_dependent: bool,
 }
 
 /// A store of positions already searched, keyed by the canonical `State::key`.
@@ -192,7 +195,7 @@ impl Default for TranspositionTable {
 
 impl TranspositionTable {
     pub fn new() -> Self {
-        let empty = TtEntry { key: 0, depth: 0, score: 0.0, bound: Bound::Exact, best: 0, age: 0 };
+        let empty = TtEntry { key: 0, depth: 0, score: 0.0, bound: Bound::Exact, best: 0, age: 0, path_dependent: false };
         TranspositionTable { entries: vec![Cell::new(empty); TT_SIZE], age: Cell::new(0) }
     }
 }
@@ -244,7 +247,7 @@ pub struct Search<'a> {
     /// subtree contained one has a path-dependent value and is not stored in
     /// the table (see the note in `negamax`).
     repetition_hits: u64,
-    /// Table stores skipped because the subtree hit a repetition (statistics).
+    /// Table stores flagged path-dependent because the subtree hit a repetition (statistics).
     pub stores_skipped: u64,
 }
 
@@ -407,7 +410,7 @@ pub fn negamax(s: &mut Search, state: &State, depth: u32, mut alpha: f64, mut be
         if e.best != 0 {
             first = 1 << s.tables.sym_square[s.tables.sym_inverse[sym]][bit_index(e.best)];
         }
-        if e.depth >= depth {
+        if !e.path_dependent && e.depth >= depth {
             match e.bound {
                 Bound::Exact => return e.score,
                 Bound::Lower => alpha = alpha.max(e.score),
@@ -451,12 +454,13 @@ pub fn negamax(s: &mut Search, state: &State, depth: u32, mut alpha: f64, mut be
     // this line: the same position reached another way is not a repetition.
     // Storing it would serve a "draw" where there is none, hiding a forced
     // result, so such nodes are not stored (chess engines' GHI problem).
-    if !s.aborted && s.repetition_hits != repetitions_before {
-        s.stores_skipped += 1;
-    }
-    if !s.aborted && s.repetition_hits == repetitions_before {
+    if !s.aborted {
+        let path_dependent = s.repetition_hits != repetitions_before;
+        if path_dependent {
+            s.stores_skipped += 1; // stored, but flagged: its score will not be reused
+        }
         let best_canonical = if best_bit == 0 { 0 } else { 1 << s.tables.sym_square[sym][bit_index(best_bit)] };
-        s.tt_put(TtEntry { key: tt_key, depth, score: best, bound, best: best_canonical, age: 0 });
+        s.tt_put(TtEntry { key: tt_key, depth, score: best, bound, best: best_canonical, age: 0, path_dependent });
     }
     best
 }

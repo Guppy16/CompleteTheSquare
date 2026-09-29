@@ -45,7 +45,8 @@ impl Default for SharedTable {
 //   bits 32..40  depth (u8)
 //   bits 40..42  bound (0 exact, 1 lower, 2 upper)
 //   bits 42..48  best move as square index + 1 (0 = none)
-//   bits 48..64  age (u16)
+//   bits 48..63  age (15 bits)
+//   bit  63      path-dependent flag
 fn pack(e: &TtEntry) -> u64 {
     let score = (e.score as f32).to_bits() as u64;
     let depth = (e.depth.min(255) as u64) << 32;
@@ -55,8 +56,9 @@ fn pack(e: &TtEntry) -> u64 {
         Bound::Upper => 2,
     }) << 40;
     let best = if e.best == 0 { 0 } else { (e.best.trailing_zeros() as u64 + 1) << 42 };
-    let age = ((e.age & 0xFFFF) as u64) << 48;
-    score | depth | bound | best | age
+    let age = ((e.age & 0x7FFF) as u64) << 48;
+    let flag = (e.path_dependent as u64) << 63;
+    score | depth | bound | best | age | flag
 }
 
 fn unpack(key: u64, data: u64) -> TtEntry {
@@ -71,7 +73,8 @@ fn unpack(key: u64, data: u64) -> TtEntry {
             _ => Bound::Upper,
         },
         best: if best_index == 0 { 0 } else { 1 << (best_index - 1) },
-        age: ((data >> 48) & 0xFFFF) as u32,
+        age: ((data >> 48) & 0x7FFF) as u32,
+        path_dependent: (data >> 63) & 1 == 1,
     }
 }
 
@@ -92,7 +95,7 @@ impl Table for SharedTable {
     }
 
     fn put(&self, mut entry: TtEntry) {
-        entry.age = self.age() & 0xFFFF;
+        entry.age = self.age() & 0x7FFF;
         let slot = &self.slots[table_index(entry.key)];
         let w0 = slot[0].load(Ordering::Relaxed);
         let w1 = slot[1].load(Ordering::Relaxed);
