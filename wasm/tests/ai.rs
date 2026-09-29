@@ -102,9 +102,10 @@ fn ai_behaviour() {
     assert_eq!(best(position(&[(0, 0), (0, 2), (2, 0)], &[(4, 4), (4, 3), (3, 4)], 1)), (3, 3));
     // Blocks an immediate threat.
     assert_eq!(best(position(&[(0, 0), (0, 2), (2, 0)], &[(4, 4)], 1)), (2, 2));
-    // Replies to a centre opening with a corner (corners can never be captured).
+    // Replies to a centre opening from the book: an edge midpoint (C5 or one
+    // of its symmetric twins), which the depth-14 search rates above the corners.
     let reply = best(position(&[(2, 2)], &[], 1));
-    assert!([(0, 0), (0, 4), (4, 0), (4, 4)].contains(&reply), "{reply:?}");
+    assert!([(4, 2), (0, 2), (2, 0), (2, 4)].contains(&reply), "{reply:?}");
     // Lost to a double threat (green completes a square at B4 or at D4): still
     // block one of them rather than playing the first square in the move order.
     let green = [(0, 0), (0, 3), (2, 0), (2, 1), (3, 0)];

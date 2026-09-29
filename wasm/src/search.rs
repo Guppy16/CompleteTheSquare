@@ -441,12 +441,12 @@ fn best_losing_move(s: &mut Search, state: &State, depth: u32) -> (Bit, f64) {
 /// other 19 first moves are rotations/reflections of these six and are mapped
 /// through the symmetry tables. A `None` reply means "not computed yet".
 const OPENING_BOOK: [(usize, Option<usize>); 6] = [
-    (0, Some(6)),  // A1 -> B2  (C3, the search's own choice, loses in 13 plies)
-    (1, None),     // B1
-    (2, None),     // C1
-    (6, None),     // B2
-    (7, None),     // C2
-    (12, None),    // C3
+    (0, Some(6)),   // A1 -> B2  (-0.27; C3, the search's own choice, loses in 13 plies)
+    (1, Some(0)),   // B1 -> A1  (-0.20; B2/D4 -0.27; E1, A5, D1, A2, A4 lose)
+    (2, Some(0)),   // C1 -> A1  (-0.09, tied with E1)
+    (6, Some(0)),   // B2 -> A1  (-0.09)
+    (7, None),      // C2: not computed yet
+    (12, Some(22)), // C3 -> C5  (-0.13, tied with C1, A3, E3)
 ];
 
 /// The book's reply when `state` is one piece into the game, else None.
