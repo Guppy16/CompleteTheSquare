@@ -196,17 +196,33 @@ function logMoves() {
 // askEngine() sends the moves played so far to the worker and resolves with
 // its answer: a square to play ('move'), or every move scored with its
 // expected line ('analyse'). Falls back to the main thread without workers.
-const engineWorker = typeof Worker === 'undefined' ? null : new Worker(WORKER_URL);
-const engineRequests = new Map();       // request id -> resolve
+let engineWorker = null;
+const engineRequests = new Map();       // request id -> { resolve, request }
 let engineRequestId = 0;
+
+try {
+  if (typeof Worker !== 'undefined') engineWorker = new Worker(WORKER_URL);
+} catch (err) {
+  console.error('no engine worker (searching on the main thread instead):', err);
+}
 
 if (engineWorker) {
   engineWorker.onmessage = event => {
-    const resolve = engineRequests.get(event.data.id);
+    const pending = engineRequests.get(event.data.id);
     engineRequests.delete(event.data.id);
-    if (resolve) resolve(event.data);
+    if (pending) pending.resolve(event.data);
   };
-  engineWorker.onerror = err => console.error('engine worker failed:', err);
+  // If the worker dies, answer its outstanding requests on the main thread
+  // and stop using it, so the game can never be left waiting on it.
+  const workerFailed = err => {
+    console.error('engine worker failed; searching on the main thread instead:', err);
+    engineWorker = null;
+    const pending = Array.from(engineRequests.values());
+    engineRequests.clear();
+    pending.forEach(({ resolve, request }) => resolve(computeOnMainThread(...request)));
+  };
+  engineWorker.onerror = workerFailed;
+  engineWorker.onmessageerror = workerFailed;
 }
 
 function askEngine(kind, maxDepth, nodeBudget) {
@@ -216,35 +232,38 @@ function askEngine(kind, maxDepth, nodeBudget) {
 }
 
 // The same for the position after the given moves (used to score a whole
-// game). The fallback without a worker can only see the current position.
+// game). Without a worker the request runs here, on the current position.
 function askEngineAt(moves, kind, maxDepth, nodeBudget) {
-  if (!engineWorker) {
-    const started = performance.now();
-    if (kind === 'analyse') {
-      const count = ai.analyse(maxDepth, nodeBudget);
-      const lines = [];
-      for (let i = 0; i < count; i++) {
-        const line = [];
-        for (let j = 0; ; j++) {
-          const square = ai.analysis_line(i, j);
-          if (square < 0) break;
-          line.push(square);
-        }
-        lines.push({ index: ai.analysis_move(i), score: ai.analysis_score(i), line });
-      }
-      return Promise.resolve({ lines, depth: ai.analysis_depth(), book: ai.book_square(), ms: Math.round(performance.now() - started) });
-    }
-    if (kind === 'evaluate') {
-      return Promise.resolve({ score: ai.evaluate(maxDepth, nodeBudget), ms: Math.round(performance.now() - started) });
-    }
-    const index = ai.ai_suggest(maxDepth, nodeBudget);
-    return Promise.resolve({ index, ms: Math.round(performance.now() - started) });
-  }
+  if (!engineWorker) return Promise.resolve(computeOnMainThread(kind, maxDepth, nodeBudget));
   const id = ++engineRequestId;
   return new Promise(resolve => {
-    engineRequests.set(id, resolve);
+    engineRequests.set(id, { resolve, request: [kind, maxDepth, nodeBudget] });
     engineWorker.postMessage({ id, kind, moves, boardSize: BOARD_SIZE, maxDepth, nodeBudget });
   });
+}
+
+// Run a request on this thread's copy of the module (current position only).
+function computeOnMainThread(kind, maxDepth, nodeBudget) {
+  const started = performance.now();
+  if (kind === 'analyse') {
+    const count = ai.analyse(maxDepth, nodeBudget);
+    const lines = [];
+    for (let i = 0; i < count; i++) {
+      const line = [];
+      for (let j = 0; ; j++) {
+        const square = ai.analysis_line(i, j);
+        if (square < 0) break;
+        line.push(square);
+      }
+      lines.push({ index: ai.analysis_move(i), score: ai.analysis_score(i), line });
+    }
+    return { lines, depth: ai.analysis_depth(), book: ai.book_square(), ms: Math.round(performance.now() - started) };
+  }
+  if (kind === 'evaluate') {
+    return { score: ai.evaluate(maxDepth, nodeBudget), ms: Math.round(performance.now() - started) };
+  }
+  const index = ai.ai_suggest(maxDepth, nodeBudget);
+  return { index, ms: Math.round(performance.now() - started) };
 }
 
 // --- Analysis ----------------------------------------------------------------
@@ -446,7 +465,11 @@ function requestAIMove() {
       render();                          // stale answer: the game changed while thinking
       return;
     }
-    ai.play(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE);
+    if (!ai.play(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE)) {
+      console.error(`AI chose an illegal square ${squareName(index)}`);
+      render();
+      return;
+    }
     console.log(`AI played ${squareName(index)} in ${ms} ms`);
     logMoves();
     render();
@@ -494,7 +517,7 @@ function onHint() {
   hintButton.disabled = true;
   const snapshot = moveText();
   askEngine('move', AI_MAX_DEPTH, AI_NODE_BUDGET).then(({ index }) => {
-    hintButton.disabled = false;
+    hintButton.disabled = isAITurn() || gameOver();
     if (index < 0 || moveText() !== snapshot || gameOver()) return;
     cells.forEach(cell => cell.classList.remove('hint'));
     cells[index].classList.add('hint');
