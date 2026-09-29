@@ -45,10 +45,6 @@ Open items, roughly in order of value.
   `cd wasm && cargo run --release --example analyse -- "1. C2" 14`, then validate the
   candidate with the arena before adding it to `OPENING_BOOK` in `wasm/src/search.rs`
   (the C3 entry showed a depth-14 score can be wrong in play).
-- **GCP:** the Cloud Build trigger and the Cloud Run service are deleted. Still to do:
-  disconnect the repository under Cloud Build → Repositories, and remove the Google Cloud
-  Build app from the repo on GitHub (Settings → Integrations) so no check appears on
-  commits. Check Billing → Reports a day later.
 - **Git remote over SSH** so pushes need no token:
   `git remote set-url origin git@github.com:Guppy16/CompleteTheSquare.git`.
 - **Is A1 a forced win?** Not at depth 14 (B2 and D4 hold). A definitive answer needs a
