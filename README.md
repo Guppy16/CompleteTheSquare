@@ -36,9 +36,11 @@ The compiled `ai.wasm` is committed, so the site needs no build step to deploy.
 
 Open items, roughly in order of value.
 
-- **Is A1 a forced win?** Not at depth 14 (B2 and D4 hold). A definitive answer needs a
-  solver rather than a depth-limited search; with the symmetry-keyed table this is plausible
-  as an overnight run.
+- **A1 is a first-player win** at depth 16 (every red reply loses; B2 and D4 last longest,
+  green's winning square landing on the 16th ply after them; see the
+  [opening book page](docs/14-opening-book.md)). Open: whether the other five distinct
+  first moves are also wins (at depth 14 their book replies hold), and the winning line
+  against B2 written out.
 - **Tests for the untested exports** (`analyse`, `evaluate`, `ai_suggest`, `board_at`,
   `repetitions`, the node-budget abort) and a transposition-table-enabled comparison
   against plain search, which would have caught the index bug.

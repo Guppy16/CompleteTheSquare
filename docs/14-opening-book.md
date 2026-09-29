@@ -71,8 +71,25 @@ that wins in play into `OPENING_BOOK` as `(square, Some(reply))`. All six entrie
 made this way; C2's candidates A1, E1 and B1 each won 40 of 40, so the top-scoring
 corner was kept.
 
-## Not a proof
+## A1 is a first-player win
 
-Depth 14 is a horizon, not a solution. After 1. A1 the replies B2 and D4 hold to depth
-14 with a score of -0.27; a longer forced win may exist. Settling whether A1 is a
-first-player win needs a solver rather than a fixed-depth search.
+At depth 14, B2 and D4 held with a score of -0.27. At depth 16, searched with the
+[parallel search](17-parallel-search.md) after the repetition-store fix, **every one of
+red's 24 replies to A1 loses**:
+
+| red's reply | score | meaning |
+|-------------|-------|---------|
+| B2, D4 | -1.010 | green's winning square lands on the 16th ply after the reply |
+| 13 others (C1, D1, A2, B1, A3, A4, E1, A5, D2, D3, B4, C4, C3) | -1.030 | two plies sooner |
+| C2, E2, B5, E3, E4, B3, D5, E5, C5 | -1.050 | sooner still |
+
+This is a proof as far as the engine is sound: a forced win is only ever reported when
+every defence ends in an actual completed square, or an unanswerable three-corner
+threat at the horizon, and since the fix the single-threaded and 16-thread searches
+give identical scores. It is consistent with the shallower results: a win landing on
+ply 16 is invisible at depth 14 and shows exactly at 16.
+
+The book keeps B2 as the reply to A1. Against perfect play it loses last; against
+anyone else the game is a normal game. Whether the other five distinct first moves are
+also wins is open: at depth 14 their book replies score between 0.00 and -0.20, far from
+a loss, so any forced win there needs more than 14 plies.
