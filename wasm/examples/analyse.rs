@@ -53,12 +53,17 @@ fn main() {
     println!("ply  side  played  engine  (depth {depth})");
     for (i, &bit) in moves.iter().enumerate() {
         let side = if state.current == 0 { "G" } else { "R" };
-        let engine = if threads > 1 {
+        // The "engine would have played" column is a full search per ply; at
+        // deep settings that costs as much as the real analysis, so it is
+        // skipped (shown as "-") above depth 10.
+        let engine = if depth > 10 {
+            "-".to_string()
+        } else if threads > 1 {
             best_move_parallel(&state, depth, &history, threads).0.map(|(b, _)| name(b)).unwrap_or_default()
         } else {
             best_move(&state, depth, &history).map(name).unwrap_or_default()
         };
-        let flag = if engine != name(bit) { "  <- differs" } else { "" };
+        let flag = if engine != "-" && engine != name(bit) { "  <- differs" } else { "" };
         println!("{:>3}  {side}     {:<6}  {:<6}{flag}", i + 1, name(bit), engine);
         let (next, won) = play_move(t, bit, &state);
         state = next;
