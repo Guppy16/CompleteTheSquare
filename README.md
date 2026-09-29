@@ -19,7 +19,7 @@ and open `http://localhost:3000/`.
 
 The rules and the AI are a Rust crate in `wasm/`, compiled to WebAssembly and loaded by
 `square-game/script.js`. How it works (bitboards, alpha-beta pruning, evaluation) is
-explained in [docs/ai-search.md](docs/ai-search.md).
+explained page by page in [docs/README.md](docs/README.md).
 
 ```bash
 rustup target add wasm32-unknown-unknown   # once

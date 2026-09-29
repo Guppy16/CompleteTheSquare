@@ -1,0 +1,75 @@
+# 14. The opening book
+
+**Code:** `wasm/src/search.rs`: `OPENING_BOOK`, `book_move`, the check at the top of
+`best_move_scored`; `wasm/src/lib.rs`: `book_square`; the
+`opening_book_replies_through_symmetry` test in `wasm/tests/ai.rs`.
+
+## Why a book
+
+A game against a good opener showed the limit of a few hundred thousand nodes: after
+1. A1 the engine replied C3, and green's A1, A2, A3 column down the left edge, anchored
+on an uncapturable corner, turned out to be a forced win that takes about 13 plies to
+prove. Depth 14 (about 30 minutes offline) shows C3 loses and B2 or D4 hold. The page
+cannot afford that depth per move, but it can afford a table computed once.
+
+## The table
+
+There are 25 first moves but only 6 distinct ones; the rest are rotations or reflections.
+The book stores the 6 and maps through the [symmetry](10-symmetry.md) tables:
+
+```rust
+const OPENING_BOOK: [(usize, Option<usize>); 6] = [
+    (0, Some(6)),   // A1 -> B2  (-0.27; C3, the search's own choice, loses in 13 plies)
+    (1, Some(0)),   // B1 -> A1  (-0.20; B2/D4 -0.27; E1, A5, D1, A2, A4 lose)
+    (2, Some(0)),   // C1 -> A1  (-0.09, tied with E1)
+    (6, Some(0)),   // B2 -> A1  (-0.09)
+    (7, None),      // C2: not computed yet
+    (12, Some(0)),  // C3 -> A1  (see below)
+];
+
+pub fn book_move(state: &State) -> Option<Bit> {
+    if state.occupied().count_ones() != 1 { return None; }
+    let square = bit_index(state.occupied());
+    for s in 0..SYMMETRIES {
+        let canonical = t.sym_square[s][square];
+        if let Some(&(_, Some(reply))) = OPENING_BOOK.iter().find(|(first, _)| *first == canonical) {
+            return Some(1 << t.sym_square[t.sym_inverse[s]][reply]);
+        }
+    }
+    None
+}
+```
+
+Find a symmetry that carries the opponent's square onto a book square, take the book's
+reply, and carry it back through the inverse. `best_move_scored` consults the book
+before searching, so a book reply costs nothing and the page shows it instantly.
+
+## Worked example
+
+Green opens E5 (square 24). Rotate-180 maps it to A1 (square 0), which is in the book
+with reply B2 (square 6). The inverse of rotate-180 is rotate-180, which maps square 6
+to square 18, D4. So the AI answers E5 with D4, the mirror of B2. The test checks this
+pair and that a two-piece position gets no book move.
+
+## Scores are not enough: validate by play
+
+The C3 entry is the cautionary tale. At depth 14 the edge midpoint C5 scored -0.13 and
+the corner A1 -0.16, so C5 went into the book. The next arena run dropped from 39 wins
+in 40 to 14. Bisecting to the entry and then playing 40 games from each reply settled
+it: C5 won 13, A1 won 40. A 0.03 gap at depth 14 is evaluation noise; the corner is
+right. Every entry is now checked with the arena before it is trusted.
+
+## Adding the missing entry
+
+```bash
+cd wasm && cargo run --release --example analyse -- "1. C2" 14   # 30 to 45 minutes idle
+```
+
+Take the top replies, test each with a few dozen arena games from that opening, and add
+the winner to `OPENING_BOOK` as `(7, Some(square))`.
+
+## Not a proof
+
+Depth 14 is a horizon, not a solution. After 1. A1 the replies B2 and D4 hold to depth
+14 with a score of -0.27; a longer forced win may exist. Settling whether A1 is a
+first-player win needs a solver rather than a fixed-depth search.

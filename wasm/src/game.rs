@@ -1,5 +1,5 @@
 //! Rules engine: bitboard representation, legal moves, captures, win detection.
-//! A direct port of `bitboard.py`; see `docs/ai-search.md` for the ideas.
+//! Originally a port of a Python prototype; see `docs/README.md` for the ideas.
 
 use std::sync::OnceLock;
 
