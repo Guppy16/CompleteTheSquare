@@ -68,6 +68,14 @@ The loop above, with the AI as red, from the position after green's block:
 A test in `wasm/tests/ai.rs` replays this exact position and checks both that the AI
 declines the repetition and that the game declares the threefold draw.
 
+## Repetition scores stay on their line
+
+A draw-by-repetition score is true only on the line that repeated; the same position
+reached another way is not a repetition. So a node whose subtree hit a repetition is not
+stored in the [transposition table](09-transposition-table.md). Before that guard
+existed, stale "draws" leaked between lines and, with several threads sharing a table,
+produced false forced results.
+
 ## Cost
 
 The check is a scan of a few dozen `u64`s per node (game length plus search depth). It

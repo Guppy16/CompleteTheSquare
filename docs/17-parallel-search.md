@@ -83,9 +83,20 @@ duplicated each other and lazy SMP gained nothing at all.
 Root splitting scales well because the moves are independent; lazy SMP gains less
 because the threads overlap, which is normal for it. The scoring phase is the one that
 dominates the offline searches, so a depth-14 book entry now takes minutes rather than
-half an hour. Scores agree with the single-threaded search except on lines that repeat,
-where the contempt caveat of the [transposition table](09-transposition-table.md) can
-shift a value by a few hundredths.
+half an hour.
+
+## The bug the threads exposed
+
+The first parallel runs disagreed with each other and with the single-threaded search
+on the position after 1. A1 B2: root splitting said green had four winning moves, lazy
+SMP's line started with a move worth +0.22, and the earlier single-threaded run said the
+position was merely +0.27 for green. None of it was a race. The table was storing draw
+scores that came from repetitions on one line and serving them on other lines where the
+position was not a repetition (see the [transposition table](09-transposition-table.md)).
+Single-threaded that was rare; sixteen threads filling one table made it constant. Once
+path-dependent values stopped being stored, the strategies agreed. The lesson for
+testing parallel code: a disagreement between the threaded and unthreaded results is the
+symptom to chase, and the cause may be a pre-existing hole rather than a race.
 
 ## Root splitting: `root_scores_parallel`
 
