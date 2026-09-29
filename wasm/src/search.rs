@@ -454,8 +454,12 @@ const OPENING_BOOK: [(usize, Option<usize>); 6] = [
     (2, Some(0)),   // C1 -> A1  (-0.09, tied with E1)
     (6, Some(0)),   // B2 -> A1  (-0.09)
     (7, None),      // C2: not computed yet
-    (12, Some(22)), // C3 -> C5  (-0.13, tied with C1, A3, E3)
+    (12, Some(0)),  // C3 -> A1  (see below)
 ];
+// Every entry is also validated by play (`examples/arena`), not just by its
+// depth-14 score: after 1. C3 the search rated the edge midpoint C5 (-0.13)
+// a hair above the corner A1 (-0.16), but in 40 arena games red won 13 with
+// C5 and 40 with A1. A 0.03 gap at depth 14 is evaluation noise.
 
 /// The book's reply when `state` is one piece into the game, else None.
 pub fn book_move(state: &State) -> Option<Bit> {
