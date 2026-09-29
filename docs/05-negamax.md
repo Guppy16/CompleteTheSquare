@@ -1,6 +1,6 @@
 # 5. Minimax, written as negamax
 
-**Code:** `wasm/src/search.rs`: `negamax` (the loop), `search_root`.
+**Code:** [`wasm/src/search.rs`](../wasm/src/search.rs): `negamax` (the loop), `search_root`.
 
 ## Minimax
 
@@ -66,3 +66,7 @@ answer, one code path.
 
 `search_root` is the same loop over the root's moves but keeps the best move as well as
 the score, and hands a lost position to [`best_losing_move`](13-lost-positions.md).
+
+---
+
+<sub>← [4. Evaluation](04-evaluation.md) · [index](README.md) · [6. Alpha-beta pruning](06-alpha-beta.md) →</sub>

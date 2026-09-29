@@ -1,6 +1,6 @@
 # 2. Move generation
 
-**Code:** `wasm/src/game.rs`: `State::empty`; `wasm/src/search.rs`: `ordered_moves`,
+**Code:** [`wasm/src/game.rs`](../wasm/src/game.rs): `State::empty`; [`wasm/src/search.rs`](../wasm/src/search.rs): `ordered_moves`,
 `capture_moves`.
 
 ## The idea
@@ -58,3 +58,7 @@ iterations, not 25.
 The search never converts a move back to `(row, col)`. `play_move` takes the bit,
 the transposition table stores the bit, and only the final answer is turned into a square
 index with `trailing_zeros()` for the page, which turns it into a grid cell.
+
+---
+
+<sub>← [1. Bitboards](01-bitboards.md) · [index](README.md) · [3. Captures and wins](03-captures-and-wins.md) →</sub>

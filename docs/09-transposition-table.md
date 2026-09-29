@@ -1,7 +1,7 @@
 # 9. The transposition table
 
-**Code:** `wasm/src/search.rs`: `TranspositionTable`, `TtEntry`, `Bound`, the probe and
-store in `negamax`, `TT_BITS`; `wasm/src/lib.rs`: the `tt` field of `Session`.
+**Code:** [`wasm/src/search.rs`](../wasm/src/search.rs): `TranspositionTable`, `TtEntry`, `Bound`, the probe and
+store in `negamax`, `TT_BITS`; [`wasm/src/lib.rs`](../wasm/src/lib.rs): the `tt` field of `Session`.
 
 ## The idea
 
@@ -153,3 +153,7 @@ This was found the hard way. Single-threaded, the stale draws were rare enough t
 as a small error; with sixteen threads sharing one table they were everywhere, and three
 searches of the same position gave three different answers, including a false "every
 reply loses". Chess engines call this the graph-history interaction problem.
+
+---
+
+<sub>← [8. Quiescence search](08-quiescence.md) · [index](README.md) · [10. Symmetry](10-symmetry.md) →</sub>

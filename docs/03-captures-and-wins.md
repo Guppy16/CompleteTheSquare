@@ -1,6 +1,6 @@
 # 3. Captures and wins
 
-**Code:** `wasm/src/game.rs`: `build_tables` (the `capture_rays` and `corner_masks`
+**Code:** [`wasm/src/game.rs`](../wasm/src/game.rs): `build_tables` (the `capture_rays` and `corner_masks`
 parts), `remove_pieces`, `winning_mask`, `play_move`.
 
 ## The rules
@@ -65,10 +65,7 @@ the run is.
 
 Red has B2 and C2, green has D2 and plays A2:
 
-```
-   A B C D E
-2  G R R G .
-```
+![before](img/capture-before.svg) ![after](img/capture-after.svg)
 
 The "right" ray from A2 is `[B2, C2, D2, E2]`. B2 is red: `captured = {B2}`. C2 is red:
 `captured = {B2, C2}`. D2 is green: `opp &= !captured` removes both. The loop breaks
@@ -102,3 +99,7 @@ let won = winning_mask(t, move_bit, boards[player]);  // check
 Captures remove only opponent pieces and the win check looks only at the mover's pieces,
 so the order does not affect the result. After a win the winner stays as `current`, which
 the page uses to know who won.
+
+---
+
+<sub>← [2. Move generation](02-move-generation.md) · [index](README.md) · [4. Evaluation](04-evaluation.md) →</sub>

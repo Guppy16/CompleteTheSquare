@@ -1,6 +1,6 @@
 # 1. Bitboards
 
-**Code:** `wasm/src/game.rs`: `State`, `square_bit`, `bit_index`, `FULL_MASK`.
+**Code:** [`wasm/src/game.rs`](../wasm/src/game.rs): `State`, `square_bit`, `bit_index`, `FULL_MASK`.
 
 ## The idea
 
@@ -45,6 +45,8 @@ the seven unused high bits of the `u32`; masking keeps only real squares.
 
 Green on A1 and C3, red on B1:
 
+![green A1, C3; red B1](img/bitboard-example.svg)
+
 ```
 green = bit 0 | bit 12 = 0b1_0000_0000_0001 = 4097
 red   = bit 1          = 2
@@ -75,3 +77,7 @@ Every technique that follows runs on these integers. Move generation, captures, 
 detection, the evaluation and the symmetry transforms are all a few AND, OR and shift
 operations per position, which is why the search visits about six million positions a
 second on one core.
+
+---
+
+<sub>[index](README.md) · [2. Move generation](02-move-generation.md) →</sub>

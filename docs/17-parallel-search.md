@@ -1,8 +1,8 @@
 # 17. Parallel search (native tools only)
 
-**Code:** `wasm/src/parallel.rs`: `SharedTable`, `best_move_parallel`,
-`root_scores_parallel`, `principal_variation_parallel`; `wasm/src/search.rs`: the `Table`
-trait, `Search::with_evaluator`, `Search::with_stop`; `wasm/tests/parallel.rs`.
+**Code:** [`wasm/src/parallel.rs`](../wasm/src/parallel.rs): `SharedTable`, `best_move_parallel`,
+`root_scores_parallel`, `principal_variation_parallel`; [`wasm/src/search.rs`](../wasm/src/search.rs): the `Table`
+trait, `Search::with_evaluator`, `Search::with_stop`; [`wasm/tests/parallel.rs`](../wasm/tests/parallel.rs).
 
 ## Scope
 
@@ -127,3 +127,7 @@ cd wasm && cargo run --release --example analyse -- "1. A1" 14 16   # 16 threads
 
 The single-threaded path is the default (`threads` = 1) and is what the tests compare
 against.
+
+---
+
+<sub>← [16. WebAssembly and the page](16-wasm-and-page.md) · [index](README.md)</sub>

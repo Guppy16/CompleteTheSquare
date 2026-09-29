@@ -1,8 +1,8 @@
 # 14. The opening book
 
-**Code:** `wasm/src/search.rs`: `OPENING_BOOK`, `book_move`, the check at the top of
-`best_move_scored`; `wasm/src/lib.rs`: `book_square`; the
-`opening_book_replies_through_symmetry` test in `wasm/tests/ai.rs`.
+**Code:** [`wasm/src/search.rs`](../wasm/src/search.rs): `OPENING_BOOK`, `book_move`, the check at the top of
+`best_move_scored`; [`wasm/src/lib.rs`](../wasm/src/lib.rs): `book_square`; the
+`opening_book_replies_through_symmetry` test in [`wasm/tests/ai.rs`](../wasm/tests/ai.rs).
 
 ## Why a book
 
@@ -45,6 +45,8 @@ reply, and carry it back through the inverse. `best_move_scored` consults the bo
 before searching, so a book reply costs nothing and the page shows it instantly.
 
 ## Worked example
+
+![after A1](img/book-a1.svg) ![after E5](img/book-e5.svg)
 
 Green opens E5 (square 24). Rotate-180 maps it to A1 (square 0), which is in the book
 with reply B2 (square 6). The inverse of rotate-180 is rotate-180, which maps square 6
@@ -89,7 +91,18 @@ threat at the horizon, and since the fix the single-threaded and 16-thread searc
 give identical scores. It is consistent with the shallower results: a win landing on
 ply 16 is invisible at depth 14 and shows exactly at 16.
 
+What a forced win looks like in practice, against a weaker reply: after
+1. A1 E1 2. A2 D1 3. B1 B2 4. C2 B2 5. C3 B2 6. C1 A3 7. A4 A3 8. C4, green completes the
+square A2 C2 A4 C4 (the circles). Red's B2 is captured and replayed three times along the
+way.
+
+![the end of a winning line against E1](img/a1-line-end.svg)
+
 The book keeps B2 as the reply to A1. Against perfect play it loses last; against
 anyone else the game is a normal game. Whether the other five distinct first moves are
 also wins is open: at depth 14 their book replies score between 0.00 and -0.20, far from
 a loss, so any forced win there needs more than 14 plies.
+
+---
+
+<sub>← [13. Lost positions](13-lost-positions.md) · [index](README.md) · [15. Measuring strength](15-measuring-strength.md) →</sub>

@@ -1,7 +1,7 @@
 # 6. Alpha-beta pruning
 
-**Code:** `wasm/src/search.rs`: `negamax` (the `alpha`/`beta` handling), the
-`alpha_beta_matches_plain_minimax` test in `wasm/tests/ai.rs`.
+**Code:** [`wasm/src/search.rs`](../wasm/src/search.rs): `negamax` (the `alpha`/`beta` handling), the
+`alpha_beta_matches_plain_minimax` test in [`wasm/tests/ai.rs`](../wasm/tests/ai.rs).
 
 ## The idea
 
@@ -75,3 +75,7 @@ With the best move always tried first, alpha-beta visits about `2 * b^(d/2)` lea
 instead of `b^d`: depth 6 costs about what depth 3 cost before. With bad ordering it
 degrades back towards plain minimax, which is why [Move ordering](07-move-ordering.md)
 matters so much.
+
+---
+
+<sub>← [5. Minimax, written as negamax](05-negamax.md) · [index](README.md) · [7. Move ordering](07-move-ordering.md) →</sub>

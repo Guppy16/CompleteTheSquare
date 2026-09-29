@@ -1,8 +1,8 @@
 # 11. Iterative deepening and the node budget
 
-**Code:** `wasm/src/search.rs`: `best_move_scored`, `search_root`, the `node_budget`
+**Code:** [`wasm/src/search.rs`](../wasm/src/search.rs): `best_move_scored`, `search_root`, the `node_budget`
 and `aborted` fields of `Search` and their checks in `negamax`;
-`square-game/script.js`: `AI_NODE_BUDGET`, `AI_MAX_DEPTH`.
+[`square-game/script.js`](../square-game/script.js): `AI_NODE_BUDGET`, `AI_MAX_DEPTH`.
 
 ## Iterative deepening
 
@@ -76,6 +76,10 @@ Average nodes are below the budget because many searches end early on a forced r
 
 ## Knobs
 
-- `AI_NODE_BUDGET` and `AI_MAX_DEPTH` in `square-game/script.js` for play.
+- `AI_NODE_BUDGET` and `AI_MAX_DEPTH` in [`square-game/script.js`](../square-game/script.js) for play.
 - `ANALYSIS_FIRST_BUDGET`, `ANALYSIS_BUDGET`, `ANALYSIS_MAX_DEPTH` for the analysis tab,
   which doubles the budget pass after pass (see [WebAssembly and the page](16-wasm-and-page.md)).
+
+---
+
+<sub>← [10. Symmetry](10-symmetry.md) · [index](README.md) · [12. Repetition](12-repetition.md) →</sub>

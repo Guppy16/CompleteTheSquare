@@ -1,6 +1,6 @@
 # 7. Move ordering
 
-**Code:** `wasm/src/search.rs`: `ordered_moves`, `Evaluator::new` (the `move_order`
+**Code:** [`wasm/src/search.rs`](../wasm/src/search.rs): `ordered_moves`, `Evaluator::new` (the `move_order`
 part), the `killers` field of `Search`, the table probe at the top of `negamax`.
 
 ## Why it matters
@@ -77,3 +77,7 @@ Red to move, 20 empty squares, the table remembers C3 was best here last time, a
 killer at this depth is D4. `ordered_moves` yields: C3, D4, then the empty squares in
 corner-first order with C3 and D4 skipped. If C3 refutes the position the node costs one
 child search instead of twenty.
+
+---
+
+<sub>← [6. Alpha-beta pruning](06-alpha-beta.md) · [index](README.md) · [8. Quiescence search](08-quiescence.md) →</sub>

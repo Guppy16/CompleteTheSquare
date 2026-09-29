@@ -1,20 +1,38 @@
 # 8. Quiescence search
 
-**Code:** `wasm/src/search.rs`: `quiescence`, `capture_moves`, `Evaluator::has_threat`,
-`QUIESCENCE_DEPTH`.
+**Code:** [`wasm/src/search.rs`](../wasm/src/search.rs): `quiescence`, `capture_moves`,
+`Evaluator::has_threat`, `QUIESCENCE_DEPTH`.
+**Experiment:** [`wasm/examples/experiment_quiescence.rs`](../wasm/examples/experiment_quiescence.rs).
 
 ## The problem: the horizon effect
 
-A fixed-depth search stops at an arbitrary moment. If the last move inside the horizon
-was a capture, the evaluation counts the captured piece as gone even when the very next
-move takes one back. The search then chases these phantom gains, or fears phantom
-losses. This game is full of capture exchanges, so it hurt badly: the version without
-quiescence won 115 of 200 games against a blundering opponent; with it, 195.
+A search that looks a fixed number of plies ahead has to stop somewhere and ask the
+[evaluation](04-evaluation.md) how good the position is. It stops at an arbitrary moment,
+often in the middle of an exchange of captures, and then judges a position that is about
+to change completely. This is the
+[horizon effect](https://en.wikipedia.org/wiki/Horizon_effect), a long-known problem in
+chess programs.
 
-## The fix
+A real example, found by searching random positions for exactly this pattern:
 
-At a leaf, instead of calling `evaluate` directly, call `quiescence`. It keeps
-searching, but only capturing moves, until the position is quiet:
+![red to move](img/horizon-1.svg) ![red B1 captures C1](img/horizon-2.svg) ![green B2 captures two](img/horizon-3.svg)
+
+1. **Red to move**, green five pieces to red's four. Red plays B1, and green's C1, sitting
+   between B1 and red's D1, is captured.
+2. **A search that stops here** sees red a piece up. The evaluation for green is -0.06:
+   red looks to have won something.
+3. **One ply later** green plays B2, and red's C2 and D2, sitting between B2 and green's
+   E2, are both captured. Green is now two pieces up, and the evaluation for green is
+   +0.07.
+
+A search whose horizon falls between steps 2 and 3 believes B1 wins a piece. It will
+steer towards B1, or towards positions that allow it, for a gain that does not exist.
+
+## The fix: keep searching until the position is quiet
+
+[Quiescence search](https://en.wikipedia.org/wiki/Quiescence_search) replaces the
+evaluation at the leaves. Instead of judging the position immediately, it keeps
+searching, but **only capturing moves**, until no capture is pending:
 
 ```rust
 pub fn quiescence(s: &mut Search, state: &State, mut alpha: f64, beta: f64, qdepth: u32) -> f64 {
@@ -40,36 +58,63 @@ pub fn quiescence(s: &mut Search, state: &State, mut alpha: f64, beta: f64, qdep
 }
 ```
 
-Three ideas in there:
+Three ideas are in there.
 
-- **Stand pat.** The side to move may decline to capture and take the static evaluation.
-  Captures can only improve on it, so `best` starts at `stand_pat`. This is what makes
-  the result a fair estimate rather than "assume a capture is forced".
+> [!TIP]
+> **"Stand pat"** is poker slang: to keep the hand you have rather than draw new cards.
+> Here it means the side to move may decline every capture and accept the static
+> evaluation of the position as it is.
+
+- **Standing pat.** The side to move is never forced to capture, so the result is at
+  least `stand_pat`. Captures can only improve on it; `best` starts there. Without this
+  the search would assume a capture is compulsory and overrate positions where the only
+  captures are bad.
 - **Captures only.** `capture_moves` walks the empty squares and keeps those where some
-  ray has an opponent run closed by our own piece, using the same precomputed rays as
-  the rules engine. The tree is narrow because captures are rare.
+  ray holds a run of opponent pieces closed by one of ours, using the same precomputed
+  rays as the [rules](03-captures-and-wins.md). Captures are rare, so this tree is narrow.
 - **A threat is a win.** If the side to move already owns three corners of a square with
-  the fourth empty, it wins next move whatever else happens, so the leaf scores as a
-  win without searching.
+  the fourth empty, it wins next move, so the leaf scores as a win without searching.
 
-`QUIESCENCE_DEPTH` (4) caps how far the exchange is followed.
+`QUIESCENCE_DEPTH` (4) caps how long an exchange is followed.
 
-## Worked example
+In the example: a normal search stopping after B1 hands the position to `quiescence`.
+Green is to move and has a capture, B2. Standing pat gives -0.06; searching B2 gives
++0.07; green takes the better, and the leaf is scored +0.07. B1 no longer looks like a
+gain.
 
-Depth runs out right after red captured green's C2 by playing D2 (green has B2):
+## Does it pay for itself?
 
+Quiescence costs nodes: every leaf now also scans for captures, and some leaves grow
+small capture trees. The experiment plays the [arena](15-measuring-strength.md)'s games,
+the AI as red against a depth-5 opponent that blunders 10% of the time, with quiescence
+on and off:
+
+```bash
+cd wasm && cargo run --release --example experiment_quiescence -- 100
 ```
-   A B C D E
-2  . G . R .      green to move, C2 now empty
-```
 
-Static evaluation: red is a piece up, say -0.03 for green. But green can play C2 and
-capture D2 back through E2 if green has E2. Quiescence tries that capture: after it,
-green is level again, and the exchange is over; it returns about +0.01. The leaf is
-scored +0.01, not -0.03, and the search stops seeing red's capture as a gain.
+| red's search | without quiescence | with quiescence |
+|--------------|--------------------|-----------------|
+| fixed depth 5 | 23 of 100 | 92 of 100 |
+| page budget, 400k nodes | 96 of 100 | 95 of 100 |
 
-## Cost
+"Without" still keeps the one-move-win check; it only removes the capture search.
 
-Every leaf now costs at least an evaluation plus a capture scan. At equal depth the
-search is about 1.5x slower and far stronger; with a node budget it simply reaches a
-slightly lower depth per move, which the measurements show is a good trade.
+The two rows tell different stories, and both are real:
+
+- **At a fixed depth it is decisive.** With the horizon always at the same ply, the
+  search keeps falling for exchanges like the one above, and loses three games in four.
+- **At the page's node budget it makes no measurable difference** in this arena.
+  Iterative deepening under a budget ends at different depths from move to move, and a
+  deeper search sees most of these exchanges directly; against this opponent that is
+  enough. The first version of this page claimed quiescence was a clear win for the
+  page's play; that came from a fixed-depth comparison and is not supported by this
+  measurement.
+
+It stays in the engine because it costs nothing measurable at the budget, it makes the
+fixed-depth searches behind the offline [book](14-opening-book.md) reliable, and a stronger or less blundering
+opponent may separate the two where this arena does not. That last point is untested.
+
+---
+
+<sub>← [7. Move ordering](07-move-ordering.md) · [index](README.md) · [9. The transposition table](09-transposition-table.md) →</sub>

@@ -1,6 +1,6 @@
 # 13. Lost positions
 
-**Code:** `wasm/src/search.rs`: `best_losing_move`, the hand-off at the end of
+**Code:** [`wasm/src/search.rs`](../wasm/src/search.rs): `best_losing_move`, the hand-off at the end of
 `search_root`, `Evaluator::winning_squares`, `Evaluator::count_threats`.
 
 ## The problem
@@ -49,7 +49,9 @@ Tuples compare element by element, so the order of preference is:
 ## Worked example
 
 From a real game: green played A4 and created three winning squares at once, B4, C4 and
-D4. Red has no defence; each candidate removes one threat and leaves two:
+D4 (the circles). Red has no defence; each candidate removes one threat and leaves two:
+
+![three winning squares](img/lost-triple-threat.svg)
 
 | red plays | what it does | green still wins with |
 |-----------|--------------|-----------------------|
@@ -66,3 +68,7 @@ side of the board. A test covers this position.
 
 It runs only when the root is lost, which is near the end of a game and shallow, and it
 runs under the same node budget, so the timing stays predictable.
+
+---
+
+<sub>← [12. Repetition](12-repetition.md) · [index](README.md) · [14. The opening book](14-opening-book.md) →</sub>

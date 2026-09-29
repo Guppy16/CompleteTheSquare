@@ -1,8 +1,8 @@
 # 10. Symmetry
 
-**Code:** `wasm/src/game.rs`: `symmetry`, `transform`, `canonical_key`, the
+**Code:** [`wasm/src/game.rs`](../wasm/src/game.rs): `symmetry`, `transform`, `canonical_key`, the
 `sym_square` / `sym_rows` / `sym_inverse` tables built in `build_tables`; the
-`symmetric_positions_share_a_key` test in `wasm/tests/ai.rs`.
+`symmetric_positions_share_a_key` test in [`wasm/tests/ai.rs`](../wasm/tests/ai.rs).
 
 ## The idea
 
@@ -90,6 +90,9 @@ in the current frame, and legality is re-checked before use.
 ## Worked example
 
 Green on A1, red on C3, red to move. Its rotate-180 twin is green on E5, red on C3.
+
+![green A1, red C3](img/sym-a.svg) ![rotated](img/sym-b.svg)
+
 Both produce the same 16 candidate keys, so both get the same canonical key. If the
 first one was searched and its best move was B2, the twin's probe finds the entry and
 maps B2 through the inverse of whichever symmetry won, giving D4 for the rotated board.
@@ -102,3 +105,7 @@ asymmetric and the gain fades, but the cost stays small.
 
 The [opening book](14-opening-book.md) uses the same tables to map its six entries onto
 all 25 first moves.
+
+---
+
+<sub>← [9. The transposition table](09-transposition-table.md) · [index](README.md) · [11. Iterative deepening and the node budget](11-iterative-deepening.md) →</sub>

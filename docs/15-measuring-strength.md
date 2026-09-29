@@ -1,6 +1,6 @@
 # 15. Measuring strength
 
-**Code:** `wasm/examples/arena/main.rs`, `wasm/examples/analyse.rs`;
+**Code:** [`wasm/examples/arena/main.rs`](../wasm/examples/arena/main.rs), [`wasm/examples/analyse.rs`](../wasm/examples/analyse.rs);
 `search::root_scores`, `search::principal_variation`.
 
 ## Only measure
@@ -25,7 +25,7 @@ Results, 200 games each unless noted:
 | engine as red | wins |
 |---------------|------|
 | plain alpha-beta, fixed depth 7 | 115 |
-| plus quiescence | 195 |
+| plus quiescence (both rows at fixed depth 7) | 195 |
 | plus transposition table and node budget | 196 |
 | plus symmetry, 400k budget (100 games) | 96 |
 | with the bad C3 book entry (40 games) | 14 of 40 |
@@ -75,3 +75,7 @@ five contended for the same cores. Run deep searches one at a time.
   percent.
 - The search runs at about 6 million nodes per second natively on one core; WebAssembly
   in a browser is perhaps 2 to 4 times slower, a phone slower again.
+
+---
+
+<sub>← [14. The opening book](14-opening-book.md) · [index](README.md) · [16. WebAssembly and the page](16-wasm-and-page.md) →</sub>

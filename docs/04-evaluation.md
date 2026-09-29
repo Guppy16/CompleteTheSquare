@@ -1,6 +1,6 @@
 # 4. Evaluation
 
-**Code:** `wasm/src/search.rs`: `Evaluator` (`new`, `evaluate`, `threat_difference`),
+**Code:** [`wasm/src/search.rs`](../wasm/src/search.rs): `Evaluator` (`new`, `evaluate`, `threat_difference`),
 the `W_*` and `WIN_*` constants.
 
 ## The idea
@@ -61,7 +61,10 @@ A square with any opponent corner is dead for me, hence `th == 0`.
 
 ## Worked example
 
-Green to move with A1, B1, A2 (a corner, two edges); red with C3, D3 (interior).
+Green to move with A1, B1, A2 (a corner, two edges); red with C3, D3 (interior). The
+circle marks green's threat.
+
+![green to move](img/eval-example.svg)
 
 - material: (3 - 2) / 25 = +0.04, times 0.25 = +0.010
 - position: green 2 + 1 + 1 = 4, red 0, (4 - 0) / 20 = 0.2, times 0.10 = +0.020
@@ -83,3 +86,7 @@ about evaluation terms was wrong more often than right; see
 
 `W_MATERIAL`, `W_POSITION`, `W_THREATS`, `MAX_THREATS` at the top of `search.rs`. Keep the
 weights summing to less than `WIN_SCORE`.
+
+---
+
+<sub>← [3. Captures and wins](03-captures-and-wins.md) · [index](README.md) · [5. Minimax, written as negamax](05-negamax.md) →</sub>

@@ -1,7 +1,7 @@
 # 12. Repetition
 
-**Code:** `wasm/src/search.rs`: the `path` field of `Search`, `Search::draw_score`,
-`DRAW_CONTEMPT`, the check at the top of `negamax`; `wasm/src/lib.rs`: `Session::keys`,
+**Code:** [`wasm/src/search.rs`](../wasm/src/search.rs): the `path` field of `Search`, `Search::draw_score`,
+`DRAW_CONTEMPT`, the check at the top of `negamax`; [`wasm/src/lib.rs`](../wasm/src/lib.rs): `Session::keys`,
 `Session::repetitions`, `Session::draw`, `REPETITION_LIMIT`.
 
 ## The problem
@@ -11,6 +11,11 @@ a 2x2 square and threatened to complete it; green blocked at C2, which captured 
 through green's E2; red replayed D2, which captured C2 through red's B2 and restored the
 threat. Each recapture looked to the search like "gain a piece and threaten", so both
 sides would have repeated forever.
+
+The position, red threatening C2 (the circle); green's block there captures D2, and red's
+replay of D2 captures C2 back:
+
+![the loop](img/repetition-loop.svg)
 
 ## In the search: any repeat is a draw
 
@@ -65,18 +70,23 @@ The loop above, with the AI as red, from the position after green's block:
 - If red were actually losing everywhere else (all below -0.2), it would take the
   repetition, which is the right call: a draw beats a loss.
 
-A test in `wasm/tests/ai.rs` replays this exact position and checks both that the AI
+A test in [`wasm/tests/ai.rs`](../wasm/tests/ai.rs) replays this exact position and checks both that the AI
 declines the repetition and that the game declares the threefold draw.
 
 ## Repetition scores stay on their line
 
 A draw-by-repetition score is true only on the line that repeated; the same position
-reached another way is not a repetition. So a node whose subtree hit a repetition is not
-stored in the [transposition table](09-transposition-table.md). Before that guard
-existed, stale "draws" leaked between lines and, with several threads sharing a table,
-produced false forced results.
+reached another way is not a repetition. So a node whose subtree hit a repetition is
+stored in the [transposition table](09-transposition-table.md) with a *path-dependent*
+flag: its best move is still used, its score never is. Before that existed, stale
+"draws" leaked between lines and, with several threads sharing a table, produced false
+forced results.
 
 ## Cost
 
 The check is a scan of a few dozen `u64`s per node (game length plus search depth). It
 did not measurably change search time.
+
+---
+
+<sub>← [11. Iterative deepening and the node budget](11-iterative-deepening.md) · [index](README.md) · [13. Lost positions](13-lost-positions.md) →</sub>
