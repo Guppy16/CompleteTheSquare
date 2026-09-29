@@ -327,16 +327,25 @@ function renderAnalysis(lines, depth, settled, book = -1) {
   evalFill.style.height = `${50 + 50 * clamped}%`;
   evalText.textContent = scoreText(best);
 
-  // Candidate markers on the board, shrinking with the gap to the best move.
+  // The book move, if any, is shown first: it comes from a depth-14 offline
+  // search, deeper than the analysis reaches in a few seconds.
+  const bookLine = book >= 0 ? lines.find(l => l.index === book) : undefined;
+  const shown = bookLine ? [bookLine, ...top.filter(l => l.index !== book)] : top;
+
+  // Candidate markers on the board: size and opacity shrink with the gap to
+  // the best engine move; the book move is always full size.
   cells.forEach(cell => cell.textContent = '');
-  top.forEach(({ index, score }) => {
-    const gap = Math.abs(top[0].score - score);
-    const size = Math.max(0.55, 1 - gap * 4);          // best: full size; 0.11 behind: about half
+  shown.forEach(({ index, score }) => {
+    const gap = index === book ? 0 : Math.abs(top[0].score - score);
+    const size = Math.max(0.55, 1 - gap * 4);          // 0.11 behind: about half size
+    const opacity = Math.max(0.45, 1 - gap * 3);
     const mark = document.createElement('span');
     mark.classList.add('mark', toMove === 0 ? 'green' : 'red');
+    if (index === book) mark.classList.add('book');
     mark.style.width = `${Math.round(72 * size)}%`;
     mark.style.height = `${Math.round(72 * size)}%`;
     mark.style.fontSize = `${(0.7 * size).toFixed(2)}rem`;
+    mark.style.opacity = opacity.toFixed(2);
     mark.textContent = scoreText(greenScore(score));
     cells[index].appendChild(mark);
   });
@@ -347,7 +356,6 @@ function renderAnalysis(lines, depth, settled, book = -1) {
   header.classList.add('header');
   const info = document.createElement('span');
   info.textContent = `Depth ${depth} · ${getColorName(toMove)} to move`;
-  if (book >= 0) info.textContent += ` · Book: ${squareName(book)}`;   // the AI plays this (depth-14 offline result)
   header.appendChild(info);
   if (!settled && analysisBudget >= analysisCap) {
     const deeper = document.createElement('button');
@@ -361,8 +369,9 @@ function renderAnalysis(lines, depth, settled, book = -1) {
   }
   analysisEl.appendChild(header);
 
-  // The lines, best first, scores for Green; tap one to play its first move.
-  top.forEach(({ index, score, line }) => {
+  // The lines: the book move first if there is one, then the engine's best;
+  // scores for Green. Tap one to play its first move.
+  shown.forEach(({ index, score, line }) => {
     const row = document.createElement('div');
     row.classList.add('line');
     const scoreEl = document.createElement('span');
@@ -372,6 +381,13 @@ function renderAnalysis(lines, depth, settled, book = -1) {
     movesEl.classList.add('moves');
     movesEl.textContent = lineText(line, ply);
     row.append(scoreEl, movesEl);
+    if (index === book) {
+      const tag = document.createElement('span');
+      tag.classList.add('tag');
+      tag.textContent = 'book';
+      tag.title = 'From the opening book: a depth-14 search, deeper than this analysis';
+      row.appendChild(tag);
+    }
     row.addEventListener('click', () => onCellClick(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE));
     analysisEl.appendChild(row);
   });

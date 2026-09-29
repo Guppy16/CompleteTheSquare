@@ -282,11 +282,25 @@ button[hidden] {
   font-weight: 700;
 }
 
-/* Candidate-move markers on the board: opacity shows the gap to the best move. */
+/* Candidate-move markers on the board: size and opacity show the gap to the
+   best move; the book move gets a white outline. */
+.cell .mark.book {
+  box-shadow: 0 0 0 2px #fff;
+}
+
+#analysis .tag {
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
 .cell .mark {
   width: 72%;
   height: 72%;
-  border-radius: 50%;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
