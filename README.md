@@ -47,7 +47,8 @@ Open items, roughly in order of value.
 - **Tests for the untested exports** (`analyse`, `evaluate`, `ai_suggest`, `board_at`,
   `repetitions`, the node-budget abort) and a transposition-table-enabled comparison
   against plain search, which would have caught the index bug.
-- **Engine headroom, only if wanted:** late move reductions, and a multi-core split. The
-  AI already beats a blundering depth-5 opponent 96 to 98% of the time.
+- **Engine headroom, only if wanted:** late move reductions. (Multi-core search exists for
+  the offline tools: `analyse -- "<moves>" depth threads`.) The AI already beats a
+  blundering depth-5 opponent 96 to 98% of the time.
 - **Deferred UI:** a variation tree in the move list (undo/redo covers exploring lines);
   persisting the game across reloads in local storage.

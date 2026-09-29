@@ -23,6 +23,7 @@ stands alone.
 | 14 | [Opening book](14-opening-book.md) | precomputed replies to the first move |
 | 15 | [Measuring strength](15-measuring-strength.md) | the arena and the analyse tool, and what they showed |
 | 16 | [WebAssembly and the page](16-wasm-and-page.md) | exports, the worker, the analysis tab |
+| 17 | [Parallel search](17-parallel-search.md) | lazy SMP and root splitting for the offline tools |
 
 ## Where the code is
 
@@ -31,6 +32,7 @@ stands alone.
 | `wasm/src/game.rs` | `State`, the precomputed `Tables`, `play_move`, captures, win detection, symmetry |
 | `wasm/src/search.rs` | `Evaluator`, `negamax`, `quiescence`, `TranspositionTable`, iterative deepening, book, analysis |
 | `wasm/src/lib.rs` | the `Session` (move list, undo/redo) and every `extern "C"` export |
+| `wasm/src/parallel.rs` | native-only: the shared table, lazy SMP, root splitting |
 | `wasm/tests/ai.rs` | the regression tests |
 | `wasm/examples/arena` | the AI as red against a human-like opponent |
 | `wasm/examples/analyse.rs` | replay a game; every move scored; expected line |
