@@ -17,7 +17,8 @@ pub const DRAW_CONTEMPT: f64 = 0.2;
 /// evaluation is never taken in the middle of a capture exchange.
 pub const QUIESCENCE_DEPTH: u32 = 4;
 /// Transposition table size (entries); a power of two.
-const TT_SIZE: usize = 1 << 18; // 262k entries, 10 MB
+const TT_BITS: u32 = 18;
+const TT_SIZE: usize = 1 << TT_BITS; // 262k entries of 32 bytes: 8 MB
 
 pub struct Evaluator {
     corner_mask: u32,
@@ -169,7 +170,8 @@ impl TranspositionTable {
     }
 
     fn index(key: u64) -> usize {
-        (key.wrapping_mul(0x9E37_79B9_7F4A_7C15) >> 48) as usize & (TT_SIZE - 1)
+        // Top TT_BITS bits of the multiplicative hash.
+        (key.wrapping_mul(0x9E37_79B9_7F4A_7C15) >> (64 - TT_BITS)) as usize
     }
 
     fn get(&self, key: u64) -> Option<&TtEntry> {
@@ -643,4 +645,21 @@ pub fn best_move(state: &State, depth: u32, history: &[u64]) -> Option<Bit> {
 
 pub fn best_move_index(state: &State, depth: u32, history: &[u64]) -> Option<usize> {
     best_move(state, depth, history).map(bit_index)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn table_index_uses_every_slot_range() {
+        // Keys spread across the whole table, not just the first 65k slots
+        // (the index once shifted by 48 bits, leaving 16 bits, and the mask hid it).
+        let mut high = 0;
+        for k in 0..100_000u64 {
+            high = high.max(TranspositionTable::index(k.wrapping_mul(0x1234_5678_9ABC_DEF1)));
+        }
+        assert!(high >= TT_SIZE / 2, "highest index seen {high} of {TT_SIZE}");
+        assert!(high < TT_SIZE);
+    }
 }
