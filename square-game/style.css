@@ -239,10 +239,12 @@ button[hidden] {
   display: none;
 }
 
-/* Analysis panel: the top lines, best first, scores for Green like lichess's White. */
+/* Analysis panel: the top lines, best first, scores for Green like lichess's White.
+   Fixed height (header + three lines) so the board does not jump between passes. */
 #analysis {
   width: min(100%, var(--board-max));
-  margin-top: 8px;
+  min-height: 7.4em;
+  margin: 0 0 8px;
   padding: 6px 8px;
   background: var(--surface);
   border-radius: 4px;

@@ -283,8 +283,13 @@ function startAnalysis() {
   analysisGeneration += 1;
   const inAnalysis = mode === 'analysis';
   evalColumn.hidden = !inAnalysis;
-  analysisEl.hidden = !inAnalysis || gameOver();
-  if (!inAnalysis || gameOver()) return;
+  analysisEl.hidden = !inAnalysis;     // stays in place even when the game is over
+  if (!inAnalysis) return;
+  if (gameOver()) {
+    analysisEl.textContent = ai.winner() >= 0 ? `${getColorName(ai.winner())} won.` : 'Drawn.';
+    evaluateGame();
+    return;
+  }
   analysisEl.textContent = 'Analysing…';
   analysisBudget = 0;
   analysisCap = ANALYSIS_BUDGET;
@@ -322,13 +327,16 @@ function renderAnalysis(lines, depth, settled, book = -1) {
   evalFill.style.height = `${50 + 50 * clamped}%`;
   evalText.textContent = scoreText(best);
 
-  // Candidate markers on the board, fading with the gap to the best move.
+  // Candidate markers on the board, shrinking with the gap to the best move.
   cells.forEach(cell => cell.textContent = '');
   top.forEach(({ index, score }) => {
     const gap = Math.abs(top[0].score - score);
+    const size = Math.max(0.55, 1 - gap * 4);          // best: full size; 0.11 behind: about half
     const mark = document.createElement('span');
     mark.classList.add('mark', toMove === 0 ? 'green' : 'red');
-    mark.style.opacity = Math.max(0.3, 1 - gap * 5).toFixed(2);
+    mark.style.width = `${Math.round(72 * size)}%`;
+    mark.style.height = `${Math.round(72 * size)}%`;
+    mark.style.fontSize = `${(0.7 * size).toFixed(2)}rem`;
     mark.textContent = scoreText(greenScore(score));
     cells[index].appendChild(mark);
   });
