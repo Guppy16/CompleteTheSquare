@@ -144,7 +144,7 @@ pub fn best_move_parallel(state: &State, max_depth: u32, history: &[u64], thread
                 // Odd threads start one ply deeper so the threads diverge at once.
                 for depth in (1 + (i % 2) as u32)..=max_depth.max(1) {
                     let first = best.map_or(0, |(b, _)| b);
-                    let result = search_root(&mut s, state, depth, first);
+                    let result = search_root(&mut s, state, depth, first, i);
                     if s.aborted {
                         break;
                     }

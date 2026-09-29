@@ -446,11 +446,21 @@ pub fn negamax(s: &mut Search, state: &State, depth: u32, mut alpha: f64, mut be
 
 /// One full-width search of the root to `depth`, trying `first` first.
 /// Returns (best move, its score).
-pub(crate) fn search_root(s: &mut Search, state: &State, depth: u32, first: Bit) -> Option<(Bit, f64)> {
+/// `rotate` shifts the root move order (parallel threads each start from a
+/// different root move so they split the work); 0 leaves it unchanged.
+pub(crate) fn search_root(s: &mut Search, state: &State, depth: u32, first: Bit, rotate: usize) -> Option<(Bit, f64)> {
     let empty = state.empty();
     let mut best: Option<(Bit, f64)> = None;
     let (mut alpha, beta) = (f64::NEG_INFINITY, f64::INFINITY);
-    for bit in ordered_moves(s.evaluator, empty, first, 0) {
+    let mut moves = ordered_moves(s.evaluator, empty, first, 0);
+    // Keep the previous iteration's best move in front; rotate the rest.
+    let keep = usize::from(first & empty != 0);
+    if moves.len() > keep + 1 {
+        let tail = &mut moves[keep..];
+        let n = tail.len();
+        tail.rotate_left(rotate % n);
+    }
+    for bit in moves {
         let (child, won) = play_move(s.tables, bit, state);
         if won.is_some() {
             return Some((bit, WIN_SCORE + WIN_DEPTH_BONUS * depth as f64));
@@ -682,7 +692,7 @@ pub fn best_move_scored(
         let first = best.map_or(0, |(b, _)| b);
         // Depth 1 always completes, so there is always an answer.
         s.node_budget = if depth == 1 { u64::MAX } else { node_budget };
-        let result = search_root(&mut s, state, depth, first);
+        let result = search_root(&mut s, state, depth, first, 0);
         if s.aborted {
             break; // budget ran out mid-iteration: keep the previous iteration's move
         }
