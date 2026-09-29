@@ -1,6 +1,6 @@
 //! Replay a game and show, for every move, what the engine would have played.
 //!
-//!     cargo run --release --example analyse -- "C3 A1 B2 D4 ..." [depth] [threads]
+//!     cargo run --release --example analyse -- "C3 A1 B2 D4 ..." [depth] [threads] [nopv]
 //!
 //! Moves use the page's notation (column letter, row number from the top).
 //! Paste the text from the page's "Copy moves" button; move numbers are ignored.
@@ -45,6 +45,9 @@ fn main() {
     let moves = parse(args.get(1).expect("pass the move list as the first argument"));
     let depth: u32 = args.get(2).map(|d| d.parse().unwrap()).unwrap_or(7);
     let threads: usize = args.get(3).map(|n| n.parse().unwrap()).unwrap_or(1);
+    // "nopv" as a 4th argument skips the expected line, which at deep
+    // settings costs more than scoring every move does.
+    let want_line = args.get(4).map_or(true, |a| a != "nopv");
     let t = tables();
     let mut state = State::new();
     let mut history = vec![state.key()];
@@ -82,8 +85,10 @@ fn main() {
         for (bit, score) in scores {
             println!("  {}  {score:+.3}", name(bit));
         }
-        let pv = if threads > 1 { principal_variation_parallel(&state, depth, &history, threads) } else { principal_variation(&state, depth, &history) };
-        let line: Vec<String> = pv.into_iter().map(name).collect();
-        println!("expected line: {}", line.join(" "));
+        if want_line {
+            let pv = if threads > 1 { principal_variation_parallel(&state, depth, &history, threads) } else { principal_variation(&state, depth, &history) };
+            let line: Vec<String> = pv.into_iter().map(name).collect();
+            println!("expected line: {}", line.join(" "));
+        }
     }
 }
