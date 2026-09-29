@@ -29,7 +29,7 @@ onmessage = async (event) => {
       }
       lines.push({ index: ai.analysis_move(i), score: ai.analysis_score(i), line });
     }
-    postMessage({ id, lines, depth: ai.analysis_depth(), ms: Math.round(performance.now() - started) });
+    postMessage({ id, lines, depth: ai.analysis_depth(), book: ai.book_square(), ms: Math.round(performance.now() - started) });
     return;
   }
   if (kind === 'evaluate') {

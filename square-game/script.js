@@ -232,7 +232,7 @@ function askEngineAt(moves, kind, maxDepth, nodeBudget) {
         }
         lines.push({ index: ai.analysis_move(i), score: ai.analysis_score(i), line });
       }
-      return Promise.resolve({ lines, depth: ai.analysis_depth(), ms: Math.round(performance.now() - started) });
+      return Promise.resolve({ lines, depth: ai.analysis_depth(), book: ai.book_square(), ms: Math.round(performance.now() - started) });
     }
     if (kind === 'evaluate') {
       return Promise.resolve({ score: ai.evaluate(maxDepth, nodeBudget), ms: Math.round(performance.now() - started) });
@@ -296,12 +296,12 @@ function continueAnalysis(budget) {
   const generation = analysisGeneration;
   const snapshot = moveText();
   analysisRunning = true;
-  askEngine('analyse', ANALYSIS_MAX_DEPTH, budget).then(({ lines, depth }) => {
+  askEngine('analyse', ANALYSIS_MAX_DEPTH, budget).then(({ lines, depth, book }) => {
     if (generation !== analysisGeneration || moveText() !== snapshot) return;   // position moved on
     analysisRunning = false;
     analysisBudget = budget;
     const settled = lines.length === 0 || Math.abs(lines[0].score) >= 1 || depth >= ANALYSIS_MAX_DEPTH;
-    renderAnalysis(lines, depth, settled);
+    renderAnalysis(lines, depth, settled, book);
     if (!settled && budget < analysisCap) continueAnalysis(budget * 2);
   });
 }
@@ -311,7 +311,7 @@ function goDeeper() {
   if (!analysisRunning) continueAnalysis(analysisBudget * 2);
 }
 
-function renderAnalysis(lines, depth, settled) {
+function renderAnalysis(lines, depth, settled, book = -1) {
   const top = lines.slice(0, ANALYSIS_LINES);
   const best = top.length ? greenScore(top[0].score) : 0;
   const ply = ai.move_count();
@@ -339,6 +339,7 @@ function renderAnalysis(lines, depth, settled) {
   header.classList.add('header');
   const info = document.createElement('span');
   info.textContent = `Depth ${depth} · ${getColorName(toMove)} to move`;
+  if (book >= 0) info.textContent += ` · Book: ${squareName(book)}`;   // the AI plays this (depth-14 offline result)
   header.appendChild(info);
   if (!settled && analysisBudget >= analysisCap) {
     const deeper = document.createElement('button');

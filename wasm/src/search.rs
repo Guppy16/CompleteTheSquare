@@ -591,21 +591,25 @@ pub fn search_depth_reached(
     history: &[u64],
     tt: &mut TranspositionTable,
 ) -> (Option<Bit>, u32, u64) {
-    let (best, depth, nodes) = best_move_scored(state, max_depth, node_budget, history, tt);
+    let (best, depth, nodes) = best_move_scored(state, max_depth, node_budget, history, tt, true);
     (best.map(|(bit, _)| bit), depth, nodes)
 }
 
 /// As `search_depth_reached`, also returning the best move's score for the
-/// side to move. A book move is returned with a score of 0.
+/// side to move. With `use_book`, a book move is returned with a score of 0;
+/// without it the position is always searched (for evaluations).
 pub fn best_move_scored(
     state: &State,
     max_depth: u32,
     node_budget: u64,
     history: &[u64],
     tt: &mut TranspositionTable,
+    use_book: bool,
 ) -> (Option<(Bit, f64)>, u32, u64) {
-    if let Some(bit) = book_move(state) {
-        return (Some((bit, 0.0)), 0, 0);
+    if use_book {
+        if let Some(bit) = book_move(state) {
+            return (Some((bit, 0.0)), 0, 0);
+        }
     }
     let mut s = Search::new(state, max_depth, history, Some(tt));
     let mut best = None;

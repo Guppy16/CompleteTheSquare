@@ -204,6 +204,12 @@ pub extern "C" fn analysis_depth() -> u32 {
     SESSION.with(|s| s.borrow().analysis_depth)
 }
 
+/// The opening book's move for the current position (square index), or -1.
+#[no_mangle]
+pub extern "C" fn book_square() -> i32 {
+    SESSION.with(|s| search::book_move(&s.borrow().state()).map_or(-1, |bit| bit.trailing_zeros() as i32))
+}
+
 /// Score of the current position for the side to move (a normal budgeted
 /// search, not the per-move analysis), for annotating a game's moves.
 /// 0 if the game is over.
@@ -215,7 +221,7 @@ pub extern "C" fn evaluate(max_depth: u32, node_budget: u32) -> f64 {
             return 0.0;
         }
         let (state, history) = (s.state(), s.keys());
-        search::best_move_scored(&state, max_depth.max(1), node_budget as u64, &history, &mut s.tt)
+        search::best_move_scored(&state, max_depth.max(1), node_budget as u64, &history, &mut s.tt, false)
             .0
             .map_or(0.0, |(_, score)| score)
     })
