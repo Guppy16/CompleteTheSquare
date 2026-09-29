@@ -22,7 +22,7 @@ use crate::search::{
     evaluator, ordered_moves, search_root, should_replace, table_index, Bound, Evaluator, Search, Table, TtEntry,
     WIN_DEPTH_BONUS, WIN_SCORE,
 };
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 const TT_SIZE: usize = 1 << 18;
@@ -169,22 +169,28 @@ pub fn best_move_parallel(state: &State, max_depth: u32, history: &[u64], thread
 }
 
 /// Root splitting: every legal move scored with a full window at `depth`,
-/// best first, the moves dealt round-robin to `threads` threads sharing one table.
+/// best first. The moves form a work queue: each thread takes the next
+/// unscored move when it finishes one, so no thread idles while the slowest
+/// moves are still being searched (dealing them out in advance left most
+/// cores idle for the last third of a deep run).
 pub fn root_scores_parallel(state: &State, depth: u32, history: &[u64], threads: usize) -> Vec<(Bit, f64)> {
     let threads = threads.max(1);
     let t = tables();
     let tt = SharedTable::new();
     tt.bump_age();
     let moves = ordered_moves(evaluator(), state.empty(), 0, 0);
+    let next_move = AtomicUsize::new(0);
     let evaluators: Vec<Evaluator> = (0..threads).map(rotated_evaluator).collect();
     let out: Mutex<Vec<(Bit, f64)>> = Mutex::new(Vec::new());
 
     std::thread::scope(|scope| {
-        for (i, ev) in evaluators.iter().enumerate() {
-            let (tt, out, moves) = (&tt, &out, &moves);
+        for ev in evaluators.iter() {
+            let (tt, out, moves, next_move) = (&tt, &out, &moves, &next_move);
             scope.spawn(move || {
                 let mut s = Search::new(state, depth, history, Some(tt)).with_evaluator(ev);
-                for bit in moves.iter().skip(i).step_by(threads) {
+                loop {
+                    let i = next_move.fetch_add(1, Ordering::Relaxed);
+                    let Some(bit) = moves.get(i) else { break };
                     let (child, won) = play_move(t, *bit, state);
                     let score = if won.is_some() {
                         WIN_SCORE + WIN_DEPTH_BONUS * depth as f64
