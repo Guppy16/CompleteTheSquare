@@ -18,6 +18,17 @@ pub const DRAW_CONTEMPT: f64 = 0.2;
 /// At a leaf, keep searching capture moves this many plies further so the
 /// evaluation is never taken in the middle of a capture exchange.
 pub const QUIESCENCE_DEPTH: u32 = 4;
+/// Experiments only (`examples/experiment_quiescence.rs`): if set below
+/// u32::MAX, used instead of QUIESCENCE_DEPTH. 0 turns quiescence off: the
+/// leaf takes the static evaluation (plus the one-move-win check).
+pub static QUIESCENCE_OVERRIDE: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(u32::MAX);
+
+fn quiescence_depth() -> u32 {
+    match QUIESCENCE_OVERRIDE.load(Ordering::Relaxed) {
+        u32::MAX => QUIESCENCE_DEPTH,
+        d => d,
+    }
+}
 /// Transposition table size (entries); a power of two.
 const TT_BITS: u32 = 18;
 const TT_SIZE: usize = 1 << TT_BITS; // 262k entries of 32 bytes: 8 MB
@@ -394,7 +405,7 @@ pub fn negamax(s: &mut Search, state: &State, depth: u32, mut alpha: f64, mut be
         return s.draw_score(state);
     }
     if depth == 0 {
-        return quiescence(s, state, alpha, beta, QUIESCENCE_DEPTH);
+        return quiescence(s, state, alpha, beta, quiescence_depth());
     }
     let empty = state.empty();
     if empty == 0 {
