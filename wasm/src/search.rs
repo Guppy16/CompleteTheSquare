@@ -645,8 +645,13 @@ pub struct Candidate {
 pub fn table_line(tt: &dyn Table, state: &State, first: Bit, max_len: usize) -> Vec<Bit> {
     let t = tables();
     let mut line = vec![first];
+    let mut seen = vec![state.key()];
     let (mut state, mut won) = play_move(t, first, state);
     while won.is_none() && line.len() < max_len {
+        if seen.contains(&state.key()) {
+            break; // the line repeats: from here it is a draw by repetition
+        }
+        seen.push(state.key());
         let (key, sym) = canonical_key(t, &state);
         let Some(bit) = tt.get(key).filter(|e| e.best != 0).map(|e| 1 << t.sym_square[t.sym_inverse[sym]][bit_index(e.best)]) else { break };
         if state.occupied() & bit != 0 {
