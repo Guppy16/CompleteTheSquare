@@ -113,12 +113,14 @@ impl Table for SharedTable {
     }
 }
 
-/// An evaluator whose static move order is rotated by `shift`, so different
-/// threads try the moves in different orders.
-fn rotated_evaluator(shift: usize) -> Evaluator {
+/// An evaluator whose static move order is nudged for thread `i`: the first
+/// few entries are rotated so threads try different first moves, but the
+/// order stays corner-first overall (rotating the whole list made the high
+/// threads search in a bad order and prune badly, which slowed everything).
+fn rotated_evaluator(i: usize) -> Evaluator {
     let mut ev = evaluator().clone();
-    let len = ev.move_order.len();
-    ev.move_order.rotate_left(shift % len);
+    let window = 1 + i % 4; // thread 0: unchanged; others rotate the first 2..5 moves
+    ev.move_order[..window].rotate_left(if window > 1 { 1 } else { 0 });
     ev
 }
 
