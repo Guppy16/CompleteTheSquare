@@ -34,7 +34,7 @@ fn main() {
     let (mut red_wins, mut green_wins, mut draws, mut total_plies) = (0, 0, 0, 0);
     let (mut red_nodes, mut red_moves, mut red_depth) = (0u64, 0u64, 0u64);
     for _ in 0..games {
-        let mut tt = TranspositionTable::new(); // persists for the game, as on the page
+        let tt = TranspositionTable::new(); // persists for the game, as on the page
         let mut state = State::new();
         let mut history = vec![state.key()];
         let mut plies = 0;
@@ -48,7 +48,7 @@ fn main() {
                     best_move(&state, 5, &history).unwrap()
                 }
             } else {
-                let (bit, depth, nodes) = search_depth_reached(&state, MAX_DEPTH, node_budget, &history, &mut tt);
+                let (bit, depth, nodes) = search_depth_reached(&state, MAX_DEPTH, node_budget, &history, &tt);
                 red_depth += depth as u64;
                 red_nodes += nodes;
                 red_moves += 1;

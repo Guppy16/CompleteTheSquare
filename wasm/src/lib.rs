@@ -7,6 +7,8 @@
 
 pub mod game;
 pub mod search;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod parallel;
 
 use game::{play_move, square_bit, tables, State, COLS, ROWS};
 use search::TranspositionTable;
@@ -143,12 +145,12 @@ pub extern "C" fn play(row: u32, col: u32) -> u32 {
 #[no_mangle]
 pub extern "C" fn ai_suggest(max_depth: u32, node_budget: u32) -> i32 {
     SESSION.with(|s| {
-        let mut s = s.borrow_mut();
+        let s = s.borrow();
         if s.over() {
             return -1;
         }
         let (state, history) = (s.state(), s.keys());
-        search::search_depth_reached(&state, max_depth.max(1), node_budget as u64, &history, &mut s.tt)
+        search::search_depth_reached(&state, max_depth.max(1), node_budget as u64, &history, &s.tt)
             .0
             .map_or(-1, |bit| bit.trailing_zeros() as i32)
     })
@@ -168,7 +170,7 @@ pub extern "C" fn analyse(max_depth: u32, node_budget: u32) -> u32 {
             return 0;
         }
         let (state, history) = (s.state(), s.keys());
-        let (candidates, depth) = search::analyse_position(&state, max_depth.max(1), node_budget as u64, &history, &mut s.tt);
+        let (candidates, depth) = search::analyse_position(&state, max_depth.max(1), node_budget as u64, &history, &s.tt);
         s.analysis = candidates
             .into_iter()
             .map(|c| (c.bit.trailing_zeros() as usize, c.score, c.line.into_iter().map(|b| b.trailing_zeros() as usize).collect()))
@@ -218,12 +220,12 @@ pub extern "C" fn book_square() -> i32 {
 #[no_mangle]
 pub extern "C" fn evaluate(max_depth: u32, node_budget: u32) -> f64 {
     SESSION.with(|s| {
-        let mut s = s.borrow_mut();
+        let s = s.borrow();
         if s.over() {
             return 0.0;
         }
         let (state, history) = (s.state(), s.keys());
-        search::best_move_scored(&state, max_depth.max(1), node_budget as u64, &history, &mut s.tt, false)
+        search::best_move_scored(&state, max_depth.max(1), node_budget as u64, &history, &s.tt, false)
             .0
             .map_or(0.0, |(_, score)| score)
     })
@@ -235,12 +237,12 @@ pub extern "C" fn evaluate(max_depth: u32, node_budget: u32) -> f64 {
 #[no_mangle]
 pub extern "C" fn ai_play(max_depth: u32, node_budget: u32) -> i32 {
     let chosen = SESSION.with(|s| {
-        let mut s = s.borrow_mut();
+        let s = s.borrow();
         if s.over() {
             return None;
         }
         let (state, history) = (s.state(), s.keys());
-        search::search_depth_reached(&state, max_depth.max(1), node_budget as u64, &history, &mut s.tt).0
+        search::search_depth_reached(&state, max_depth.max(1), node_budget as u64, &history, &s.tt).0
     });
     match chosen {
         Some(bit) if play_bit(bit) == 1 => bit.trailing_zeros() as i32,

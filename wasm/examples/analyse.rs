@@ -1,11 +1,12 @@
 //! Replay a game and show, for every move, what the engine would have played.
 //!
-//!     cargo run --release --example analyse -- "C3 A1 B2 D4 ..." [depth]
+//!     cargo run --release --example analyse -- "C3 A1 B2 D4 ..." [depth] [threads]
 //!
 //! Moves use the page's notation (column letter, row number from the top).
 //! Paste the text from the page's "Copy moves" button; move numbers are ignored.
 
 use complete_the_square_ai::game::{play_move, tables, State};
+use complete_the_square_ai::parallel::{best_move_parallel, principal_variation_parallel, root_scores_parallel};
 use complete_the_square_ai::search::{best_move, principal_variation, root_scores};
 
 fn parse(text: &str) -> Vec<u32> {
@@ -43,6 +44,7 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let moves = parse(args.get(1).expect("pass the move list as the first argument"));
     let depth: u32 = args.get(2).map(|d| d.parse().unwrap()).unwrap_or(7);
+    let threads: usize = args.get(3).map(|n| n.parse().unwrap()).unwrap_or(1);
     let t = tables();
     let mut state = State::new();
     let mut history = vec![state.key()];
@@ -51,7 +53,11 @@ fn main() {
     println!("ply  side  played  engine  (depth {depth})");
     for (i, &bit) in moves.iter().enumerate() {
         let side = if state.current == 0 { "G" } else { "R" };
-        let engine = best_move(&state, depth, &history).map(name).unwrap_or_default();
+        let engine = if threads > 1 {
+            best_move_parallel(&state, depth, &history, threads).0.map(|(b, _)| name(b)).unwrap_or_default()
+        } else {
+            best_move(&state, depth, &history).map(name).unwrap_or_default()
+        };
         let flag = if engine != name(bit) { "  <- differs" } else { "" };
         println!("{:>3}  {side}     {:<6}  {:<6}{flag}", i + 1, name(bit), engine);
         let (next, won) = play_move(t, bit, &state);
@@ -67,10 +73,12 @@ fn main() {
     if state.empty() != 0 && !game_over {
         let side = if state.current == 0 { "G" } else { "R" };
         println!("\n{side} to move; every move scored at depth {depth} (positive is good for {side}):");
-        for (bit, score) in root_scores(&state, depth, &history) {
+        let scores = if threads > 1 { root_scores_parallel(&state, depth, &history, threads) } else { root_scores(&state, depth, &history) };
+        for (bit, score) in scores {
             println!("  {}  {score:+.3}", name(bit));
         }
-        let line: Vec<String> = principal_variation(&state, depth, &history).into_iter().map(name).collect();
+        let pv = if threads > 1 { principal_variation_parallel(&state, depth, &history, threads) } else { principal_variation(&state, depth, &history) };
+        let line: Vec<String> = pv.into_iter().map(name).collect();
         println!("expected line: {}", line.join(" "));
     }
 }
