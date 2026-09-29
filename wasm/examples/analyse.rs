@@ -6,7 +6,7 @@
 //! Paste the text from the page's "Copy moves" button; move numbers are ignored.
 
 use complete_the_square_ai::game::{play_move, tables, State};
-use complete_the_square_ai::parallel::{best_move_parallel, principal_variation_parallel, root_scores_parallel};
+use complete_the_square_ai::parallel::{best_move_parallel, principal_variation_parallel, root_analysis_parallel};
 use complete_the_square_ai::search::{best_move, principal_variation, root_scores};
 
 fn parse(text: &str) -> Vec<u32> {
@@ -45,9 +45,11 @@ fn main() {
     let moves = parse(args.get(1).expect("pass the move list as the first argument"));
     let depth: u32 = args.get(2).map(|d| d.parse().unwrap()).unwrap_or(7);
     let threads: usize = args.get(3).map(|n| n.parse().unwrap()).unwrap_or(1);
-    // "nopv" as a 4th argument skips the expected line, which at deep
-    // settings costs more than scoring every move does.
-    let want_line = args.get(4).map_or(true, |a| a != "nopv");
+    // With several threads the expected line is read from the table the
+    // scoring filled, which is free; "pv" as a 4th argument re-searches it
+    // instead (single-threaded runs always do), which at deep settings
+    // costs more than the scoring did.
+    let full_pv = threads == 1 || args.get(4).is_some_and(|a| a == "pv");
     let t = tables();
     let mut state = State::new();
     let mut history = vec![state.key()];
@@ -81,14 +83,27 @@ fn main() {
     if state.empty() != 0 && !game_over {
         let side = if state.current == 0 { "G" } else { "R" };
         println!("\n{side} to move; every move scored at depth {depth} (positive is good for {side}):");
-        let scores = if threads > 1 { root_scores_parallel(&state, depth, &history, threads) } else { root_scores(&state, depth, &history) };
-        for (bit, score) in scores {
-            println!("  {}  {score:+.3}", name(bit));
+        let mut table_line: Vec<u32> = Vec::new();
+        if threads > 1 {
+            let candidates = root_analysis_parallel(&state, depth, &history, threads);
+            for c in &candidates {
+                println!("  {}  {:+.3}", name(c.bit), c.score);
+            }
+            if let Some(best) = candidates.first() {
+                table_line = best.line.clone();
+            }
+        } else {
+            for (bit, score) in root_scores(&state, depth, &history) {
+                println!("  {}  {score:+.3}", name(bit));
+            }
         }
-        if want_line {
+        if full_pv {
             let pv = if threads > 1 { principal_variation_parallel(&state, depth, &history, threads) } else { principal_variation(&state, depth, &history) };
             let line: Vec<String> = pv.into_iter().map(name).collect();
             println!("expected line: {}", line.join(" "));
+        } else {
+            let line: Vec<String> = table_line.into_iter().map(name).collect();
+            println!("expected line (from the table): {}", line.join(" "));
         }
     }
 }

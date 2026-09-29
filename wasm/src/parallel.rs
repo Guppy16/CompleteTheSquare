@@ -19,8 +19,8 @@
 
 use crate::game::{play_move, tables, Bit, State};
 use crate::search::{
-    evaluator, ordered_moves, search_root, should_replace, table_index, Bound, Evaluator, Search, Table, TtEntry,
-    WIN_DEPTH_BONUS, WIN_SCORE,
+    evaluator, ordered_moves, search_root, should_replace, table_index, table_line, Bound, Candidate, Evaluator, Search,
+    Table, TtEntry, WIN_DEPTH_BONUS, WIN_SCORE,
 };
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Mutex;
@@ -174,6 +174,14 @@ pub fn best_move_parallel(state: &State, max_depth: u32, history: &[u64], thread
 /// moves are still being searched (dealing them out in advance left most
 /// cores idle for the last third of a deep run).
 pub fn root_scores_parallel(state: &State, depth: u32, history: &[u64], threads: usize) -> Vec<(Bit, f64)> {
+    root_analysis_parallel(state, depth, history, threads).into_iter().map(|c| (c.bit, c.score)).collect()
+}
+
+/// As `root_scores_parallel`, and for each move the expected continuation
+/// read from the shared table after the scoring (the same way the page's
+/// analysis panel gets its lines). Free, where re-searching for a line
+/// costs as much again as the scoring did.
+pub fn root_analysis_parallel(state: &State, depth: u32, history: &[u64], threads: usize) -> Vec<Candidate> {
     let threads = threads.max(1);
     let t = tables();
     let tt = SharedTable::new();
@@ -205,7 +213,7 @@ pub fn root_scores_parallel(state: &State, depth: u32, history: &[u64], threads:
 
     let mut out = out.into_inner().unwrap();
     out.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-    out
+    out.into_iter().map(|(bit, score)| Candidate { bit, score, line: table_line(&tt, state, bit, 16) }).collect()
 }
 
 /// The expected line, like `search::principal_variation`, using the parallel search.
