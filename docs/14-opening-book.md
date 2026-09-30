@@ -99,9 +99,26 @@ way.
 ![the end of a winning line against E1](img/a1-line-end.svg)
 
 The book keeps B2 as the reply to A1. Against perfect play it loses last; against
-anyone else the game is a normal game. Whether the other five distinct first moves are
-also wins is open: at depth 14 their book replies score between 0.00 and -0.20, far from
-a loss, so any forced win there needs more than 14 plies.
+anyone else the game is a normal game.
+
+## All six openings at depth 16
+
+The other five distinct first moves were searched the same way (each about three hours
+on 16 threads). None is a forced win for green, and every book reply was confirmed:
+
+| green opens | red's best reply | score for red | replies that hold | verdict at depth 16 |
+|-------------|------------------|---------------|-------------------|---------------------|
+| A1 (corner) | B2, D4 | -1.01 | none | **green wins by force** |
+| B1 (edge, next to a corner) | A1 | -0.20 | A1 only | draw by repetition; any other reply loses |
+| C1 (edge midpoint) | A1, E1 | -0.155 | 5 | green slightly better |
+| B2 (diagonal from a corner) | A1 | -0.145 | 7 | green slightly better |
+| C2 (next to the centre) | A1, E1 | -0.005 | 7 | level |
+| C3 (centre) | the corners and edge midpoints | -0.20 | 8 | draw by repetition |
+
+A score of exactly -0.200 is the [draw-contempt](12-repetition.md) value: red's best is a
+line that repeats. Two patterns stand out. Red's best reply is a corner in every opening
+except A1, where the corner is taken; and green's only winning first move is the corner.
+Among the rest, the closer green starts to the centre, the more even the game.
 
 ---
 

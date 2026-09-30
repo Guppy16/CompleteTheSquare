@@ -65,8 +65,9 @@ Tools (all `cargo run --release --example ...` from `wasm/`):
 ## Findings
 
 - The AI beats a depth-5 opponent that blunders 10% of the time in 96 to 98 games of 100.
-- **A1 is a first-player win** at depth 16: every red reply loses, B2 and D4 last longest.
-  Whether the other five distinct first moves are wins is being computed. Details on the
+- **A1 (a corner) is a first-player win** at depth 16: every red reply loses. The other
+  five distinct first moves are not: B1 and C3 are draws by repetition with best play, C1
+  and B2 leave green slightly better, C2 is level. Details on the
   [opening book page](docs/14-opening-book.md).
 - From any short opening at equal engine strength, the side to move wins over 90% of games:
   this game is decided by tempo from the first moves.
