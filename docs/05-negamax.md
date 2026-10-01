@@ -43,24 +43,31 @@ where the heuristic was computed for the wrong player at odd depths.
 
 ## Worked example, depth 2
 
-Green to move. Two candidate moves A and B; after each, red has two replies. Leaf
-evaluations are for the side to move at the leaf, which is green again:
+The same real position as on the [alpha-beta page](06-alpha-beta.md): green to move,
+four empty squares, every leaf scored by the static [evaluation](04-evaluation.md).
+Here the whole tree is searched, with no pruning.
 
-```
-green: A                         green: B
-  red: A1 -> leaf +0.10            red: B1 -> leaf +0.30
-  red: A2 -> leaf -0.05            red: B2 -> leaf +0.20
-```
+![the full two-ply tree](img/minimax-tree.svg)
 
-Red's node under A: children (for green) are +0.10 and -0.05. Negated for red: -0.10
-and +0.05. Red maximises: +0.05. Back at green's node, negated: **-0.05** for move A.
+**As minimax.** Under each green move, red picks the reply worst for green; green then
+picks the best of those:
 
-Red's node under B: children -0.30 and -0.20 for red; max -0.20; negated: **+0.20** for
-move B.
+| green's move | red's replies (score for green) | red picks | value |
+|---|---|---|---|
+| B2 | D4 +0.060, B3 -0.070, C4 +0.060 | B3 | -0.070 |
+| D4 | B2 +0.160, B3 -0.010, C4 +0.000 | B3 | **-0.010** |
+| B3 | B2 -0.010, D4 +0.110, C4 +0.060 | B2 | **-0.010** |
+| C4 | B2 +0.210, D4 -0.060, B3 -0.010 | D4 | -0.060 |
 
-Green picks B. In minimax terms: red chose the reply that minimised green's score under
-each move (A2 with -0.05, B2 with +0.20), and green took the maximum of those. Same
-answer, one code path.
+Green's best is -0.010, shared by D4 and B3; the root keeps the first one found, D4.
+
+**As negamax**, one branch in detail. The leaves under D4 have green to move, so their
+scores are already for the side to move there: +0.160, -0.010 and +0.000. Red's node
+negates them to get its own view: -0.160, +0.010, -0.000. Red **maximises**: +0.010,
+the reply B3. Back at the root, that is negated once more for green: **-0.010**.
+
+Same answer as minimax, with one rule at every node: take the maximum of the negated
+children. No node needs to know whose turn it is.
 
 ## Where the root differs
 

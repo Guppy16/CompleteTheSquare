@@ -73,10 +73,23 @@ why the AI opens in a corner.
 
 ## Worked example
 
-Red to move, 20 empty squares, the table remembers C3 was best here last time, and the
-killer at this depth is D4. `ordered_moves` yields: C3, D4, then the empty squares in
-corner-first order with C3 and D4 skipped. If C3 refutes the position the node costs one
-child search instead of twenty.
+From a real game: after 1. A1 C3 2. A2 B1 3. A3, red is to move with 20 empty squares.
+The numbers are the static order, corners first, then the edge squares next to them,
+and the centre last:
+
+![the order red's moves are tried in](img/move-order.svg)
+
+That order is only the fallback. In the real search two moves jump the queue:
+
+- **The table move.** Iterative deepening has already searched this position one ply
+  shallower, and the table remembers its best move. Here that is A4 (the circle), the
+  only move that holds, so it is tried **first** instead of sixth.
+- **The killer.** At deeper nodes, whichever red move last caused a cut-off at the same
+  depth is tried second.
+
+With A4 first, its score becomes the bar every other move has to beat, and most of them
+are refuted by their first reply, as in the [alpha-beta example](06-alpha-beta.md). Had
+A4 come sixth, each of the five moves before it would have needed a full search.
 
 ---
 

@@ -117,7 +117,11 @@ analysis panel builds on the previous one.
 
 ## Worked example
 
-Depth-7 reply to a centre opening, node counts:
+The position: green has opened in the centre and red is to reply, searched to depth 7.
+
+![after 1. C3](img/after-c3.svg)
+
+Node counts:
 
 | | nodes |
 |-|-------|

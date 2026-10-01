@@ -36,21 +36,43 @@ scores from the other side's point of view.
 
 ## Worked example
 
-Depth 2, green to move, same tree as in [Negamax](05-negamax.md) but searched with
-bounds. Root window is (-inf, +inf).
+A real position near the end of a game, green to move, with four empty squares: B2, D4,
+B3 and C4. Each green move leaves three replies for red, so the whole two-ply tree has
+twelve leaves, small enough to draw. Each leaf is scored with the static
+[evaluation](04-evaluation.md), for green.
 
-1. Move A. Red's replies score +0.10 and -0.05 for green, so red picks -0.05. Green now
-   knows: "I can get at least -0.05". `alpha = -0.05`.
-2. Move B, searched with the window (-inf, -0.05) from red's side, i.e. red must beat
-   -(-0.05) = +0.05 to matter. Red's first reply scores +0.30 for green, which is -0.30
-   for red, worse than the +0.05 red needs... no cut-off yet. Red's second reply scores
-   +0.20 for green, -0.20 for red. Red's best is -0.20, still below +0.05: B is worth
-   +0.20 to green, better than A. `alpha = +0.20`.
+![a two-ply search tree with mini boards at every node](img/alphabeta-tree.svg)
 
-Now suppose there were a move C whose first reply gave green only +0.02. Red's best
-under C is at least -0.02 for red, i.e. green gets at most +0.02 from C. Green already
-has +0.20 from B, so C is skipped after one reply. That is the cut-off: the remaining
-replies under C are never generated.
+Read it top to bottom, left to right, in the order the search does. Green takes the
+**maximum** over its moves; red takes the **minimum** over its replies (the code does
+the same thing with [negation](05-negamax.md)). **α** is the best value green is already
+guaranteed from the moves searched so far.
+
+| green's move | red's replies, in the order tried (score for green) | value of the move | α after |
+|---|---|---|---|
+| B2 | D4 +0.060, B3 -0.070, C4 +0.060 | -0.070 | -0.070 |
+| D4 | B2 +0.160, B3 -0.010, C4 +0.000 | -0.010 | -0.010 |
+| B3 | B2 -0.010, ~~D4~~, ~~C4~~ | at most -0.010 | -0.010 |
+| C4 | B2 +0.210, D4 -0.060, ~~B3~~ | at most -0.060 | -0.010 |
+
+1. **B2.** Nothing is known yet, so all three replies are searched. Red picks the worst
+   for green, B3 at -0.070. Green is now guaranteed at least that: **α = -0.070**.
+2. **D4.** All three replies are needed again, because each could still leave D4 better
+   than -0.070. Red's best is B3 at -0.010, better for green than B2 was:
+   **α = -0.010**, and D4 is the move to beat.
+3. **B3.** Red's first reply, B2, already holds green to -0.010. Red will pick that reply
+   or something even worse for green, so B3 is worth **at most** -0.010, no better than
+   D4. The other two replies cannot change that, and are never searched: the **cut-off**.
+4. **C4.** The first reply scores +0.210, which on its own would make C4 great, so the
+   search continues. The second, D4 at -0.060, caps C4 at -0.060, worse than D4's
+   -0.010. The third reply is skipped.
+
+Three of the twelve leaves were never generated, and the answer is exactly what a full
+search gives: green plays D4. Near the root of a real search each skipped "leaf" is a
+whole subtree, which is where the savings come from.
+
+The tree is drawn by [`wasm/examples/tree_diagram.rs`](../wasm/examples/tree_diagram.rs),
+which also prints the table above.
 
 ## Fail-soft and bounds
 
