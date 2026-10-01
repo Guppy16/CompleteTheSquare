@@ -7,6 +7,7 @@
 //!
 //!     cargo run --release --example diagram -- --moves "1. A1 C3 2. B2" > docs/img/y.svg
 //!
+//! `--numbers A1:1,E1:2` writes numbers on squares (move order).
 //! Marks are drawn as hollow circles (used for "the winning squares",
 //! "the threat", and so on).
 
@@ -46,6 +47,10 @@ fn main() {
         last = list(Some(l));
     }
     let marks = list(get("--mark"));
+    // --numbers A1:1,E1:2 writes a number on each listed square.
+    let numbers: Vec<(usize, String)> = get("--numbers")
+        .map(|arg| arg.split(',').filter_map(|t| t.split_once(':')).map(|(sq, n)| (square(sq), n.to_string())).collect())
+        .unwrap_or_default();
     let label = get("--label").cloned().unwrap_or_default();
 
     let cell = 40;
@@ -74,6 +79,12 @@ fn main() {
                 "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"{fill}\" stroke=\"{stroke}\" stroke-width=\"{width}\"/>\n",
                 x + 2, y + 2, cell - 4, cell - 4
             ));
+            if let Some((_, n)) = numbers.iter().find(|(sq, _)| *sq == i) {
+                out.push_str(&format!(
+                    "<text x=\"{}\" y=\"{}\" fill=\"#e6e6e6\" font-size=\"15\" font-weight=\"700\" text-anchor=\"middle\">{n}</text>\n",
+                    x + cell / 2, y + cell / 2 + 5
+                ));
+            }
             if marks.contains(&i) {
                 out.push_str(&format!(
                     "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"none\" stroke=\"#ff9900\" stroke-width=\"3\"/>\n",
