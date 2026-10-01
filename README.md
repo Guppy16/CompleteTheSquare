@@ -8,6 +8,13 @@ the opponent's pieces sits between it and one of yours, in any of the eight dire
 and the run is captured. Own all four corners of any square (2x2 up to 5x5) and you win.
 Adapted from [VatsalRaina/CompleteTheSquare](https://github.com/VatsalRaina/CompleteTheSquare).
 
+<p align="center">
+  <img src="docs/img/game.svg" alt="An animated game: before each move the engine's candidate squares pulse, the piece appears, captured pieces fade, the eval bar moves, and green completes a square" width="380">
+</p>
+
+<p align="center"><sub>A real game, animated from the engine. The orange rings are the engine's top candidates
+before each move, as in the Analysis tab; the bar is its evaluation for green.</sub></p>
+
 ## The page
 
 | | |
@@ -61,6 +68,8 @@ Tools (all `cargo run --release --example ...` from `wasm/`):
 | `validate_reply -- C3 A1 C5 40` | check opening-book candidates by play |
 | `bench -- 11 1 4 16` | timing of the parallel search |
 | `diagram -- --moves "1. A1 C3" --mark B2` | a board as SVG, for the docs |
+| `tree_diagram -- --green A1,C1 --red B1` | a two-ply search tree with a board at every node |
+| `animate_game -- "1. A1 E1 2. A2"` | an animated SVG of a game, like the one above |
 
 ## Findings
 

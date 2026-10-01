@@ -5,6 +5,8 @@ WebAssembly and run in the browser. Each page below covers one idea, shows the c
 implements it, and works through an example on a real board. Read them in order the first
 time; afterwards each one stands alone.
 
+<p align="center"><img src="img/game.svg" alt="an animated game" width="340"></p>
+
 > [!NOTE]
 > **Glossary**
 >
@@ -58,8 +60,10 @@ The pages name functions rather than line numbers, which move. To jump to one:
 grep -n "fn negamax" wasm/src/search.rs
 ```
 
-The board pictures are SVG files in [`img/`](img/), drawn from real positions with
-[`wasm/examples/diagram.rs`](../wasm/examples/diagram.rs).
+The pictures are SVG files in [`img/`](img/), drawn from real positions by the engine:
+boards with [`diagram.rs`](../wasm/examples/diagram.rs), search trees with
+[`tree_diagram.rs`](../wasm/examples/tree_diagram.rs), the animated game with
+[`animate_game.rs`](../wasm/examples/animate_game.rs).
 
 ## Further reading
 

@@ -34,6 +34,21 @@ prunes far better than a cold search to the same depth would. The shallow rounds
 small fraction of the last one; the cost of depth 1..d-1 together is roughly the cost of
 depth d divided by the branching factor.
 
+The rounds also change their minds, which is why only the last completed one counts.
+After 1. A1, the engine's best reply at each depth:
+
+![depths 1-5: E1](img/depth-e1.svg) ![depths 6-10: C3](img/depth-c3.svg) ![depth 14 and beyond: B2](img/depth-b2.svg)
+
+| depth | best reply | score | nodes | time |
+|-------|------------|-------|-------|------|
+| 1–5 | E1 | -0.000 to -0.030 | up to 21k | under 0.01 s |
+| 6–10 | C3 | -0.045 to -0.115 | up to 12M | up to 1.8 s |
+| 14–16 (offline) | B2 | -1.01 at 16 | billions | hours |
+
+E1 and C3 both lose by force; the loss is simply further away than those depths can see.
+B2 is the move that holds out longest, and the [opening book](14-opening-book.md) is how
+the page gets it without the hours of search.
+
 ## The node budget
 
 A fixed depth costs wildly different amounts in different positions: depth 7 on the open

@@ -9,6 +9,11 @@ A legal move is any empty square. With bitboards the set of legal moves *is* the
 mask, so generating moves means walking the set bits of one integer instead of looping
 over 25 coordinates and testing each.
 
+For green A1, C3 and red B1, the empty mask has 22 bits set. Each empty square below is
+labelled with its bit number; those 22 numbers are exactly the legal moves:
+
+![the empty squares, numbered by bit](img/empty-mask.svg)
+
 Two ways to walk set bits appear in the code.
 
 **Filter a fixed order.** The main search wants moves in a particular order (see

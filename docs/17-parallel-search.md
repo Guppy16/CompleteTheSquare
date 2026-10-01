@@ -52,6 +52,8 @@ same replacement policy as the single-threaded table applies (`should_replace`).
 
 ## Lazy SMP: `best_move_parallel`
 
+![threads sharing one table, and the layout of a slot](img/parallel.svg)
+
 Every thread runs the same iterative deepening on the same position over the shared
 table. To stop them doing identical work, odd-numbered threads start one ply deeper,
 each thread starts from a different root move (the previous iteration's best stays in

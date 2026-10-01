@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="420" viewBox="0 0 760 420" font-family="system-ui, sans-serif" font-size="13">
+<rect width="760" height="420" rx="10" fill="#121212"/>
+<defs>
+  <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#8a8a8a"/>
+  </marker>
+</defs>
+
+<text x="30" y="32" fill="#8a8a8a" font-size="12">LAZY SMP: every thread searches the same position, sharing one table</text>
+
+<!-- threads -->
+<g font-size="12">
+  <rect x="30" y="48" width="160" height="46" rx="6" fill="#2a2a2a"/>
+  <text x="110" y="68" fill="#e6e6e6" text-anchor="middle" font-weight="700">thread 0</text>
+  <text x="110" y="85" fill="#cfcfcf" text-anchor="middle">depths 1, 2, 3 …</text>
+  <rect x="210" y="48" width="160" height="46" rx="6" fill="#2a2a2a"/>
+  <text x="290" y="68" fill="#e6e6e6" text-anchor="middle" font-weight="700">thread 1</text>
+  <text x="290" y="85" fill="#cfcfcf" text-anchor="middle">depths 2, 3, 4 …</text>
+  <rect x="390" y="48" width="160" height="46" rx="6" fill="#2a2a2a"/>
+  <text x="470" y="68" fill="#e6e6e6" text-anchor="middle" font-weight="700">thread 2</text>
+  <text x="470" y="85" fill="#cfcfcf" text-anchor="middle">root moves rotated by 2</text>
+  <rect x="570" y="48" width="160" height="46" rx="6" fill="#2a2a2a"/>
+  <text x="650" y="68" fill="#e6e6e6" text-anchor="middle" font-weight="700">thread 15</text>
+  <text x="650" y="85" fill="#cfcfcf" text-anchor="middle">…</text>
+</g>
+<g stroke="#8a8a8a" stroke-width="1.5">
+  <line x1="110" y1="96" x2="300" y2="150" marker-end="url(#arr)" marker-start="url(#arr)"/>
+  <line x1="290" y1="96" x2="350" y2="150" marker-end="url(#arr)" marker-start="url(#arr)"/>
+  <line x1="470" y1="96" x2="410" y2="150" marker-end="url(#arr)" marker-start="url(#arr)"/>
+  <line x1="650" y1="96" x2="460" y2="150" marker-end="url(#arr)" marker-start="url(#arr)"/>
+</g>
+<rect x="230" y="152" width="300" height="56" rx="8" fill="#1e1e1e" stroke="#4CAF50"/>
+<text x="380" y="176" fill="#e6e6e6" text-anchor="middle" font-weight="700">SharedTable: 262,144 slots</text>
+<text x="380" y="195" fill="#cfcfcf" text-anchor="middle">no locks; first thread to finish stops the rest</text>
+
+<!-- slot layout -->
+<text x="30" y="248" fill="#8a8a8a" font-size="12">ONE SLOT: two 64-bit atomic words</text>
+<g font-size="12">
+  <rect x="30" y="260" width="700" height="34" rx="4" fill="#2a2a2a"/>
+  <text x="40" y="282" fill="#8a8a8a">word 0</text>
+  <text x="400" y="282" fill="#e6e6e6" text-anchor="middle">key XOR word 1</text>
+
+  <text x="40" y="324" fill="#8a8a8a">word 1</text>
+  <rect x="100" y="306" width="290" height="30" fill="#33502f"/>
+  <text x="245" y="326" fill="#e6e6e6" text-anchor="middle">score (f32), bits 0–31</text>
+  <rect x="390" y="306" width="72" height="30" fill="#2f4250"/>
+  <text x="426" y="326" fill="#e6e6e6" text-anchor="middle">depth</text>
+  <rect x="462" y="306" width="36" height="30" fill="#50432f"/>
+  <text x="480" y="326" fill="#e6e6e6" text-anchor="middle">bnd</text>
+  <rect x="498" y="306" width="72" height="30" fill="#4a2f50"/>
+  <text x="534" y="326" fill="#e6e6e6" text-anchor="middle">best</text>
+  <rect x="570" y="306" width="130" height="30" fill="#3a3a3a"/>
+  <text x="635" y="326" fill="#e6e6e6" text-anchor="middle">age</text>
+  <rect x="700" y="306" width="30" height="30" fill="#5a2a2a"/>
+  <text x="715" y="326" fill="#e6e6e6" text-anchor="middle">p</text>
+  <text x="100" y="352" fill="#8a8a8a" font-size="11">0</text>
+  <text x="386" y="352" fill="#8a8a8a" font-size="11">32</text>
+  <text x="458" y="352" fill="#8a8a8a" font-size="11">40</text>
+  <text x="494" y="352" fill="#8a8a8a" font-size="11">42</text>
+  <text x="566" y="352" fill="#8a8a8a" font-size="11">48</text>
+  <text x="696" y="352" fill="#8a8a8a" font-size="11">63</text>
+</g>
+<text x="380" y="384" fill="#cfcfcf" text-anchor="middle">A read checks word 0 XOR word 1 == key. If two threads wrote the slot at once,</text>
+<text x="380" y="402" fill="#cfcfcf" text-anchor="middle">the words come from different entries, the check fails, and the read is a miss: never a wrong entry.</text>
+</svg>

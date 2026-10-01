@@ -59,6 +59,8 @@ five contended for the same cores. Run deep searches one at a time.
 
 ## What the analyses established
 
+![after 3. A3](img/lost-after-a3.svg)
+
 - The engine's loss to the A1, A2, A3 column: lost after green's third move at depth 10;
   the losing choice was the reply to A1 (C3), which only shows at depth 14.
 - At depth 14 no first move is a forced win for green; at depth 16, A1 is: every red

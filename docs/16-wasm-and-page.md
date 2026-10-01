@@ -45,6 +45,8 @@ LTO, `panic = "abort"` and `strip`.
 
 ## The worker
 
+![the page, the worker, and the two copies of the module](img/architecture.svg)
+
 The search runs in a Web Worker so the page never freezes. `worker.js` holds a second
 copy of the module. The page sends the moves played so far; the worker replays them
 into its own session, runs the request, and posts the answer back. Requests carry an id
