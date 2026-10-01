@@ -15,25 +15,6 @@ Adapted from [VatsalRaina/CompleteTheSquare](https://github.com/VatsalRaina/Comp
 <p align="center"><sub>A real game, animated from the engine. The orange rings are the engine's top candidates
 before each move, as in the Analysis tab; the bar is its evaluation for green.</sub></p>
 
-## The page
-
-| | |
-|---|---|
-| **Over the Board** | two people, one screen |
-| **Against AI** | you as green or red; the AI answers in a fraction of a second |
-| **Analysis** | an engine panel in the style of lichess: eval bar, the top lines with their continuations, every move scored, "Go deeper" |
-
-Undo and redo, a move list with a tiny picture after every move, copy and paste of a game
-as text, and a Hint button. Everything is static files: [`index.html`](index.html),
-[`square-game/script.js`](square-game/script.js), [`square-game/style.css`](square-game/style.css),
-and [`square-game/worker.js`](square-game/worker.js), which runs the engine off the main thread.
-
-To run it locally:
-
-```bash
-python3 -m http.server 3000     # then open http://localhost:3000/
-```
-
 ## The engine
 
 The rules and the AI are a Rust crate in [`wasm/`](wasm/), compiled to WebAssembly
@@ -53,6 +34,7 @@ multi-threaded search for the offline tools. Each idea has its own page in
 | [`wasm/examples/`](wasm/examples/) | the tools below |
 
 ```bash
+python3 -m http.server 3000                    # serve the page locally: http://localhost:3000/
 rustup target add wasm32-unknown-unknown       # once
 cd wasm
 cargo test --release                           # all tests
