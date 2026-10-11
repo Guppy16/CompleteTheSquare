@@ -641,7 +641,7 @@ button[hidden] {
   font-size: 13px;
   font-weight: 500;
   color: var(--muted);
-  transition: all 0.3s ease;
+  transition: all calc(0.3s * var(--motion)) ease;
   border-radius: 20px;
   white-space: nowrap;
 }
@@ -664,7 +664,8 @@ button[hidden] {
   height: calc(100% - 4px);
   background-color: var(--green);
   border-radius: 20px;
-  transition: 0.3s;
+  transition: transform calc(0.5s * var(--motion)) var(--spring),
+              background-color calc(0.3s * var(--motion));
   z-index: 0;
   box-shadow: 0 2px 4px rgba(0,0,0,0.4);
 }
