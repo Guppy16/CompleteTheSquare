@@ -4,7 +4,7 @@ A 5x5 board game with an AI that runs in your browser.
 **[Play it](https://Guppy16.github.io/CompleteTheSquare/)** · [How the AI works](docs/README.md)
 
 <p align="center">
-  <img src="docs/img/game.svg" alt="A short game: Green captures B1, then completes the square A1 to C3" width="300">
+  <img src="docs/img/game.svg" alt="A short game with captures on both sides, ending with Green completing the square A1 to D4" width="300">
 </p>
 <p align="center"><sub>Capture by surrounding; win by owning four corners.</sub></p>
 
@@ -59,7 +59,7 @@ Tools (all `cargo run --release --example ...` from `wasm/`):
 | `bench -- 11 1 4 16` | timing of the parallel search |
 | `diagram -- --moves "1. A1 C3" --mark B2` | a board as SVG, for the docs |
 | `tree_diagram -- --green A1,C1 --red B1` | a two-ply search tree with a board at every node |
-| `animate_game -- "1. A1 B1 2. C1"` | an animated SVG of a game, like the one above |
+| `animate_game -- "1. A1 B2 2. C3"` | an animated SVG of a game, like the one above |
 
 ## Findings
 

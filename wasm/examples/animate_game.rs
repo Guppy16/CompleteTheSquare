@@ -1,8 +1,9 @@
 //! An animated SVG of a short game, for the README, with the page's motion: a
-//! cursor hovers a square (the hover frame, a ghost piece and any capture
-//! hints appear), moves on to the square it plays (the frame springs across),
-//! and clicks; the piece lands with a spring and captured pieces swell and
-//! fade. A win pulses its corners, traces a frame round the square and dims
+//! cursor plays each move, and for the first few captures it slows down to
+//! show the hover preview (it hovers a neighbouring square, then moves on to
+//! the one it plays with the frame springing across, and lingers on the
+//! capture hints) before it clicks; the piece lands with a spring and captured
+//! pieces swell and fade. A win pulses its corners, traces a frame round the square and dims
 //! the rest. Loops. GitHub plays SVG (SMIL) animations inline in Markdown.
 //!
 //! Timings are the page's (style.css) times its --motion, and the spring is
@@ -10,7 +11,7 @@
 //! out as keyframes, and sizes are animated as x/y/width/height rather than
 //! transforms.
 //!
-//!     cargo run --release --example animate_game -- "1. A1 B1 2. C1 E5 3. A3 E4 4. C3" > docs/img/game.svg
+//!     cargo run --release --example animate_game -- "1. A1 B2 2. C3 E5 3. D4 B2 4. A4 C3 5. D4 C3 6. D4 C5 7. D1" > docs/img/game.svg
 
 use complete_the_square_ai::game::{play_move, tables, State};
 
@@ -35,12 +36,14 @@ const TRACE_DELAY: f64 = 0.36 * MOTION; // the win's frame starts after the corn
 const TRACE: f64 = 0.6 * MOTION; // the win's frame drawing itself
 
 // The cursor's pace (not on the page: this is the player).
+const SLOW_CAPTURES: usize = 3; // the first this many captures are played slowly
 const START: f64 = 0.4; // before the first move
-const TRAVEL: f64 = 0.35; // gliding to the first square it hovers
-const LOOK: f64 = 0.4; // hovering it
+const TRAVEL: f64 = 0.3; // gliding to the first square it hovers
+const QUICK_AIM: f64 = 0.15; // a quick move: hovering its square before the click
+const LOOK: f64 = 0.45; // a slow move: hovering a neighbouring square
 const SLIDE: f64 = 0.22; // moving on to the square it plays
-const AIM: f64 = 0.5; // hovering that square before the click
-const AFTER: f64 = 0.4; // after the click, before the next move
+const AIM: f64 = 0.9; // lingering on the capture hints before the click
+const AFTER: f64 = 0.3; // after the click, before the next move
 const HOLD: f64 = 2.5; // on the final position
 const RESET: f64 = 0.6; // fading back to the empty board
 
@@ -246,11 +249,16 @@ fn main() {
     let mut hints = Vec::new(); // (square, appear, leave)
     let mut clicks = Vec::new();
     let mut now = START;
+    let mut slow_left = SLOW_CAPTURES;
 
     for i in 0..n {
         let (before, after, m) = (states[i], states[i + 1], moves[i]);
         let mover = if before.current == 0 { GREEN } else { RED };
-        let first = neighbour(&before, m, (cursor_x.last(), cursor_y.last()));
+        let slow = slow_left > 0 && captures(&before, m) != 0;
+        let first = if slow { neighbour(&before, m, (cursor_x.last(), cursor_y.last())) } else { m };
+        if slow {
+            slow_left -= 1;
+        }
         let hovers = if first == m { vec![(m, TRAVEL)] } else { vec![(first, TRAVEL), (m, SLIDE)] };
         for (k, &(sq, travel)) in hovers.iter().enumerate() {
             let (x, y) = centre(sq);
@@ -267,7 +275,7 @@ fn main() {
                 frame_x.spring(arrive, SETTLE, frame_x.last(), fx);
                 frame_y.spring(arrive, SETTLE, frame_y.last(), fy);
             }
-            let leave = arrive + if k + 1 < hovers.len() { LOOK } else { AIM };
+            let leave = arrive + if k + 1 < hovers.len() { LOOK } else if slow { AIM } else { QUICK_AIM };
             ghosts.push((sq, mover, arrive, leave));
             let hinted = captures(&before, sq);
             for c in (0..25).filter(|c| hinted & (1 << c) != 0) {
