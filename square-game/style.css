@@ -15,6 +15,8 @@
   --green-bright: #8ce68f;   /* last-move highlight in the mini boards */
   --red-bright: #ff8a80;
   --accent: #ff9900;
+  --button: #2196F3;         /* blue for controls, so green and red only mean the players */
+  --button-hover: #1e88e5;
   color-scheme: dark;
 
   /* Scales every animation's duration and delay: lower is faster. */
@@ -203,14 +205,14 @@ button {
   padding: 12px 24px;
   font-size: 16px;
   cursor: pointer;
-  background-color: var(--green);
+  background-color: var(--button);
   color: white;
   border: none;
   border-radius: 4px;
 }
 
 button:hover:not(:disabled) {
-  background-color: #45a049;
+  background-color: var(--button-hover);
 }
 
 button:disabled {
@@ -475,7 +477,7 @@ button[hidden] {
 }
 
 #mode-select .tab.active {
-  background: var(--green);
+  background: var(--button);
   color: #fff;
   font-weight: 600;
 }
@@ -648,7 +650,7 @@ button[hidden] {
 
 input:checked + .switch-slider .switch-button {
   transform: translateX(calc(100% + 2px));
-  background-color: #2196F3;
+  background-color: var(--button);
 }
 
 input:checked + .switch-slider .switch-option.left {
