@@ -456,7 +456,7 @@ function renderAnalysis(lines, depth, settled, book = -1) {
   const header = document.createElement('div');
   header.classList.add('header');
   const info = document.createElement('span');
-  info.textContent = `Depth ${depth} · ${getColorName(toMove)} to move`;
+  info.textContent = `Depth ${depth}`;     // whose move it is shows under the board
   header.appendChild(info);
   if (!settled && analysisBudget >= analysisCap) {
     const deeper = document.createElement('button');
