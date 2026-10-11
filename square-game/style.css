@@ -215,6 +215,16 @@ button:hover:not(:disabled) {
   background-color: var(--button-hover);
 }
 
+/* A press squashes the button quickly; letting go springs it back. */
+button {
+  transition: transform calc(0.45s * var(--motion)) var(--spring);
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.9);
+  transition-duration: calc(0.08s * var(--motion));
+}
+
 button:disabled {
   background-color: var(--surface-2);
   color: #666;
@@ -491,7 +501,8 @@ button[hidden] {
   border-radius: 20px;
   white-space: nowrap;
   position: relative;                  /* above the pill */
-  transition: color calc(0.3s * var(--motion));
+  transition: color calc(0.3s * var(--motion)),
+              transform calc(0.45s * var(--motion)) var(--spring);
 }
 
 #mode-select .tab:hover:not(:disabled) {
