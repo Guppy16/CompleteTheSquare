@@ -493,7 +493,10 @@ function requestAIMove() {
   undoButton.disabled = true;
   redoButton.disabled = true;
   const snapshot = moveText();
-  askEngine('move', AI_MAX_DEPTH, AI_NODE_BUDGET).then(({ index, ms }) => {
+  askEngine('move', AI_MAX_DEPTH, AI_NODE_BUDGET).then(async ({ index, ms }) => {
+    // Let the player's move finish animating first: a reply that lands on a
+    // square mid-capture would hide the capture.
+    await Promise.allSettled(boardEl.getAnimations({ subtree: true }).map(a => a.finished));
     if (moveText() !== snapshot || !isAITurn() || index < 0) {
       render();                          // stale answer: the game changed while thinking
       return;
