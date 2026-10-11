@@ -45,7 +45,8 @@ const evalBar = document.getElementById('eval-bar');
 const evalText = document.getElementById('eval-text');
 const sideSelect = document.getElementById('side-select');
 const aiFirstBox = document.getElementById('ai-first');
-const tabs = Array.from(document.querySelectorAll('#mode-select .tab'));
+const modeSelect = document.getElementById('mode-select');
+const tabs = Array.from(modeSelect.querySelectorAll('.tab'));
 const cells = [];                      // index = row * BOARD_SIZE + col, same as the bitboard
 let shownBoards = [0, 0];              // the boards as last drawn, to animate what changed
 let winOutline = null;                 // the line drawn around a completed square
@@ -689,9 +690,17 @@ function newGame() {
 }
 
 // Switch mode, keeping the current game (so a finished game can be analysed).
+// Moves the tabs' pill behind the active tab (it springs there in CSS).
+function placePill() {
+  const active = tabs.find(tab => tab.classList.contains('active'));
+  modeSelect.style.setProperty('--pill-x', `${active.offsetLeft}px`);
+  modeSelect.style.setProperty('--pill-w', `${active.offsetWidth}px`);
+}
+
 function setMode(next) {
   mode = next;
   tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.mode === mode));
+  placePill();
   sideSelect.hidden = mode !== 'ai';
   if (!ai) return;
   render();
@@ -735,6 +744,10 @@ function buildBoard() {
 }
 
 tabs.forEach(tab => tab.addEventListener('click', () => setMode(tab.dataset.mode)));
+placePill();
+requestAnimationFrame(() => modeSelect.classList.add('ready'));   // animate only from now on
+window.addEventListener('resize', placePill);
+document.fonts.ready.then(placePill);                           // tab widths can change once fonts load
 
 aiFirstBox.addEventListener('change', () => {
   aiPlayer = aiFirstBox.checked ? 0 : 1;

@@ -458,6 +458,27 @@ button[hidden] {
   background: var(--surface-2);
   border-radius: 22px;
   max-width: 100%;
+  position: relative;
+}
+
+/* One pill behind the tabs that springs to the active one. The script sets
+   --pill-x and --pill-w from the active tab; .ready (added after the first
+   placement) keeps it from sliding in on page load. */
+#mode-select::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  width: var(--pill-w, 0);
+  transform: translateX(var(--pill-x, 0));
+  background: var(--button);
+  border-radius: 20px;
+}
+
+#mode-select.ready::before {
+  transition: transform calc(0.5s * var(--motion)) var(--spring),
+              width calc(0.5s * var(--motion)) var(--spring);
 }
 
 #mode-select .tab {
@@ -469,6 +490,8 @@ button[hidden] {
   background: transparent;
   border-radius: 20px;
   white-space: nowrap;
+  position: relative;                  /* above the pill */
+  transition: color calc(0.3s * var(--motion));
 }
 
 #mode-select .tab:hover:not(:disabled) {
@@ -477,9 +500,7 @@ button[hidden] {
 }
 
 #mode-select .tab.active {
-  background: var(--button);
   color: #fff;
-  font-weight: 600;
 }
 
 /* Board with the analysis eval bar to its right */
