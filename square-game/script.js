@@ -46,6 +46,7 @@ const sideSelect = document.getElementById('side-select');
 const aiFirstBox = document.getElementById('ai-first');
 const tabs = Array.from(document.querySelectorAll('#mode-select .tab'));
 const cells = [];                      // index = row * BOARD_SIZE + col, same as the bitboard
+let shownBoards = [0, 0];              // the boards as last drawn, to animate what changed
 
 document.documentElement.style.setProperty('--board-size', BOARD_SIZE);
 
@@ -150,15 +151,21 @@ function render() {
   const winMask = ai.winning_mask();
   const over = gameOver();
 
+  const placed = (boards[0] | boards[1]) & ~(shownBoards[0] | shownBoards[1]);
+  shownBoards = boards;
+
   cells.forEach((cell, i) => {
     const bit = 1 << i;
-    cell.className = 'cell';
+    // Animation classes stay until the animation ends (see buildBoard), so a
+    // quick second render, such as the AI's reply, does not cut one short.
+    cell.classList.remove('player-W', 'player-B', 'disabled', 'winner', 'last', 'hint');
     cell.textContent = '';             // drops any analysis marker
     boards.forEach((board, player) => {
       if (board & bit) cell.classList.add(`player-${COLOURS[player]}`, 'disabled');
     });
     if (over) cell.classList.add('disabled');
     if (winMask & bit) cell.classList.add('winner');
+    if (placed & bit) animate(cell, 'drop');
   });
   const count = ai.move_count();
   if (count > 0) cells[ai.move_at(count - 1)].classList.add('last');
@@ -185,6 +192,13 @@ function render() {
   renderMoves();
   boardEl.classList.remove('thinking');
   startAnalysis();                     // no-op unless in analysis mode
+}
+
+// Restarts the animation if the cell is already running one.
+function animate(cell, name) {
+  cell.classList.remove(name);
+  void cell.offsetWidth;               // forces a style flush so re-adding restarts it
+  cell.classList.add(name);
 }
 
 function logMoves() {
@@ -611,6 +625,7 @@ function buildBoard() {
       cell.classList.add('cell');
       cell.title = `${COLUMN_LABELS[c]}${r + 1}`;
       cell.addEventListener('click', () => onCellClick(r, c));
+      cell.addEventListener('animationend', () => cell.classList.remove('drop'));
       boardEl.appendChild(cell);
       cells.push(cell);
     }

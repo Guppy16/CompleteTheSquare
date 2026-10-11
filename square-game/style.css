@@ -97,6 +97,15 @@ h1 {
   opacity: 1;
 }
 
+/* A piece just placed lands with a spring. */
+.cell.drop {
+  animation: drop 0.5s var(--spring);
+}
+
+@keyframes drop {
+  from { transform: scale(0.5); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation: none !important;
