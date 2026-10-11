@@ -11,7 +11,7 @@
 //! out as keyframes, and sizes are animated as x/y/width/height rather than
 //! transforms.
 //!
-//!     cargo run --release --example animate_game -- "1. A1 B2 2. C3 E5 3. D4 B2 4. A4 C3 5. D4 C3 6. D4 C5 7. D1" > docs/img/game.svg
+//!     cargo run --release --example animate_game -- "1. A1 B2 2. C3 E5 3. D4 B2 4. A4 C3 5. D4 C3 6. D4 C5 7. D1" > docs/img/how-to-play.svg
 
 use complete_the_square_ai::game::{play_move, tables, State};
 

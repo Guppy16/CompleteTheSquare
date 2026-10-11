@@ -4,7 +4,7 @@ A 5x5 board game with an AI that runs in your browser.
 **[Play it](https://Guppy16.github.io/CompleteTheSquare/)** · [How the AI works](docs/README.md)
 
 <p align="center">
-  <img src="docs/img/game.svg" alt="A short game with captures on both sides, ending with Green completing the square A1 to D4" width="300">
+  <img src="docs/img/how-to-play.svg" alt="A short game with captures on both sides, ending with Green completing the square A1 to D4" width="300">
 </p>
 <p align="center"><sub>Capture by surrounding; win by owning four corners.</sub></p>
 
