@@ -19,6 +19,7 @@ const ANALYSIS_FIRST_BUDGET = 500000;
 const ANALYSIS_BUDGET = 8000000;       // roughly 3-5 s in the browser
 const ANALYSIS_LINES = 3;              // how many candidate lines to show
 const EVALUATE_BUDGET = 150000;        // per position, for the scores next to each move
+const CANDIDATES_MS = 300;             // how long the AI's candidate blobs show before it plays (times --motion)
 const WIN_DEPTH_BONUS = 0.01;          // as in search.rs: a forced win scores 1 + this per ply to spare
 const WASM_URL = 'square-game/ai.wasm';
 const WORKER_URL = 'square-game/worker.js';
@@ -335,7 +336,11 @@ function computeOnMainThread(kind, maxDepth, nodeBudget) {
     return { score: ai.evaluate(maxDepth, nodeBudget), ms: Math.round(performance.now() - started) };
   }
   const index = ai.ai_suggest(maxDepth, nodeBudget);
-  return { index, ms: Math.round(performance.now() - started) };
+  const ms = Math.round(performance.now() - started);
+  const count = Math.min(3, ai.analyse(maxDepth, Math.floor(nodeBudget / 4)));   // as in worker.js
+  const candidates = [];
+  for (let i = 0; i < count; i++) candidates.push({ index: ai.analysis_move(i), score: ai.analysis_score(i) });
+  return { index, candidates, ms };
 }
 
 // --- Analysis ----------------------------------------------------------------
@@ -560,16 +565,39 @@ function evaluateGame() {
 // --- Playing -----------------------------------------------------------------
 
 // Ask the engine for the AI's move and play it, unless the game moved on meanwhile.
+// Before the AI plays: soft blobs on the moves it weighed, larger and
+// stronger the closer each was to the best, held briefly. The chosen square
+// always gets the strongest (a book move may be missing from the quick analysis).
+function showCandidates(index, candidates) {
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const motion = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--motion')) || 1;
+  if (reduced) return Promise.resolve();
+  const best = candidates.length ? candidates[0].score : 0;
+  const shown = [{ index, score: best }, ...candidates.filter(c => c.index !== index)];
+  const colour = ai.current_player() === 0 ? 'green' : 'red';
+  shown.forEach(({ index: square, score }, rank) => {
+    const gap = Math.abs(best - score);
+    const blob = document.createElement('span');
+    blob.classList.add('blob', colour);
+    blob.style.setProperty('--size', Math.max(0.45, 1 - gap * 4));
+    blob.style.setProperty('--strength', Math.max(0.3, 1 - gap * 3));
+    blob.style.setProperty('--step', rank);
+    cells[square].appendChild(blob);
+  });
+  return new Promise(resolve => setTimeout(resolve, CANDIDATES_MS * motion));
+}
+
 function requestAIMove() {
   statusEl.textContent = 'AI is thinking…';
   boardEl.classList.add('thinking');
   undoButton.disabled = true;
   redoButton.disabled = true;
   const snapshot = moveText();
-  askEngine('move', AI_MAX_DEPTH, AI_NODE_BUDGET).then(async ({ index, ms }) => {
+  askEngine('move', AI_MAX_DEPTH, AI_NODE_BUDGET).then(async ({ index, candidates, ms }) => {
     // Let the player's move finish animating first: a reply that lands on a
     // square mid-capture would hide the capture.
     await Promise.allSettled(boardEl.getAnimations({ subtree: true }).map(a => a.finished));
+    if (moveText() === snapshot && index >= 0) await showCandidates(index, candidates);
     if (moveText() !== snapshot || !isAITurn() || index < 0) {
       render();                          // stale answer: the game changed while thinking
       return;
@@ -582,6 +610,11 @@ function requestAIMove() {
     console.log(`AI played ${squareName(index)} in ${ms} ms`);
     logMoves();
     render();
+  }).catch(err => {
+    // Fail loudly: show the error where the status goes, not "AI is thinking…" forever.
+    console.error('AI move failed:', err);
+    render();
+    statusEl.textContent = `AI error: ${err.message}. Please report it, then reload the page.`;
   });
 }
 

@@ -439,6 +439,29 @@ button[hidden] {
   pointer-events: none;
 }
 
+/* Before the AI plays: a soft blob on each move it weighed (see
+   showCandidates). --size and --strength shrink with the gap to the best. */
+.cell .blob {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: calc(90% * var(--size, 1));
+  height: calc(90% * var(--size, 1));
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--blob) 0%, transparent 70%);
+  opacity: var(--strength, 1);
+  pointer-events: none;
+  animation: blob-in calc(0.2s * var(--motion)) ease-out
+             calc(70ms * var(--step, 0) * var(--motion)) backwards;
+}
+
+.cell .blob.green { --blob: var(--green); }
+.cell .blob.red { --blob: var(--red); }
+
+@keyframes blob-in {
+  from { opacity: 0; transform: scale(0.4); }
+}
+
 .cell .mark.grow {
   animation: drop calc(0.4s * var(--motion)) var(--spring)
              calc(80ms * var(--step, 0) * var(--motion)) backwards;

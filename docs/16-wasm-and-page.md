@@ -55,6 +55,11 @@ so replies match up, and every reply is checked against a snapshot of the move l
 taken when the request was sent: if the game moved on meanwhile (undo, new game, a tab
 switch) the answer is dropped.
 
+With the AI's move the worker also returns the three best moves from a quick
+`analyse` (a quarter of the move's budget, starting from the table the search just
+filled). The page shows them as soft blobs for about a fifth of a second before the piece lands,
+so you can see what the AI weighed.
+
 Because the worker keeps its own session, its transposition table persists across
 requests, which is what makes the analysis passes and the next move's search build on
 earlier work.

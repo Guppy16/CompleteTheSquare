@@ -38,5 +38,11 @@ onmessage = async (event) => {
     return;
   }
   const index = ai.ai_suggest(maxDepth, nodeBudget);
-  postMessage({ id, index, ms: Math.round(performance.now() - started) });
+  const ms = Math.round(performance.now() - started);
+  // The few best moves with exact scores, for the blobs shown before the AI
+  // plays: a quick analysis that starts from the table the search just filled.
+  const count = Math.min(3, ai.analyse(maxDepth, Math.floor(nodeBudget / 4)));
+  const candidates = [];
+  for (let i = 0; i < count; i++) candidates.push({ index: ai.analysis_move(i), score: ai.analysis_score(i) });
+  postMessage({ id, index, candidates, ms });
 };
