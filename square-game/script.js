@@ -174,7 +174,7 @@ function render() {
     removed.forEach((mask, player) => {
       if (mask & bit) {
         cell.dataset.was = COLOURS[player];
-        animate(cell, 'capture', origin < 0 ? 0 : 60 + 70 * (distance(origin, i) - 1));
+        animate(cell, 'capture', origin < 0 ? 0 : distance(origin, i) - 1);
       }
     });
   });
@@ -206,10 +206,10 @@ function render() {
 }
 
 // Restarts the animation if the cell is already running one.
-function animate(cell, name, delay = 0) {
+function animate(cell, name, step = 0) {
   cell.classList.remove(name);
   void cell.offsetWidth;               // forces a style flush so re-adding restarts it
-  cell.style.setProperty('--delay', `${delay}ms`);
+  cell.style.setProperty('--step', step);
   cell.classList.add(name);
 }
 

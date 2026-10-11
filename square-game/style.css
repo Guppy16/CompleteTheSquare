@@ -17,6 +17,9 @@
   --accent: #ff9900;
   color-scheme: dark;
 
+  /* Scales every animation's duration and delay: lower is faster. */
+  --motion: 0.75;
+
   /* A damped spring (stiffness 170, damping 16) sampled for linear(): it
      overshoots by about 9% and settles, instead of easing to a stop.
      A browser without linear() drops any animation that uses it. */
@@ -99,7 +102,7 @@ h1 {
 
 /* A piece just placed lands with a spring. */
 .cell.drop {
-  animation: drop 0.5s var(--spring);
+  animation: drop calc(0.5s * var(--motion)) var(--spring);
 }
 
 @keyframes drop {
@@ -107,12 +110,13 @@ h1 {
 }
 
 /* A captured piece swells in its old colour, then fades to an empty square.
-   --delay (set from JavaScript) ripples the captures out from the move. */
+   --step (set from JavaScript, the distance from the move) ripples them outward. */
 .cell.capture[data-was="W"] { --from: var(--green); }
 .cell.capture[data-was="B"] { --from: var(--red); }
 
 .cell.capture {
-  animation: capture 0.3s ease-in var(--delay, 0ms) backwards;
+  animation: capture calc(0.3s * var(--motion)) ease-in
+             calc((60ms + 70ms * var(--step, 0)) * var(--motion)) backwards;
 }
 
 @keyframes capture {
@@ -437,7 +441,7 @@ button[hidden] {
   right: 0;
   height: 50%;
   background: var(--green);
-  transition: height 0.6s var(--spring);
+  transition: height calc(0.6s * var(--motion)) var(--spring);
 }
 
 #eval-text {
