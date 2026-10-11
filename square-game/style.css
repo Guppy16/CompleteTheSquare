@@ -401,6 +401,11 @@ button[hidden] {
   pointer-events: none;
 }
 
+.cell .mark.grow {
+  animation: drop calc(0.4s * var(--motion)) var(--spring)
+             calc(80ms * var(--step, 0) * var(--motion)) backwards;
+}
+
 .cell .mark.green { background: var(--green); }
 .cell .mark.red { background: var(--red); }
 

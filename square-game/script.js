@@ -419,9 +419,12 @@ function renderAnalysis(lines, depth, settled, book = -1) {
   const shown = bookLine ? [bookLine, ...top.filter(l => l.index !== book)] : top;
 
   // Candidate markers on the board: size and opacity shrink with the gap to
-  // the best engine move; the book move is always full size.
+  // the best engine move; the book move is always full size. Markers on newly
+  // marked squares grow in, best first; the deeper passes that follow redraw
+  // the rest in place.
+  const wasMarked = cells.map(cell => cell.querySelector('.mark') !== null);
   cells.forEach(cell => cell.textContent = '');
-  shown.forEach(({ index, score }) => {
+  shown.forEach(({ index, score }, rank) => {
     const gap = index === book ? 0 : Math.abs(top[0].score - score);
     const size = Math.max(0.55, 1 - gap * 4);          // 0.11 behind: about half size
     const opacity = Math.max(0.45, 1 - gap * 3);
@@ -433,6 +436,10 @@ function renderAnalysis(lines, depth, settled, book = -1) {
     mark.style.fontSize = `${(0.7 * size).toFixed(2)}rem`;
     mark.style.opacity = opacity.toFixed(2);
     mark.textContent = scoreText(greenScore(score));
+    if (!wasMarked[index]) {
+      mark.classList.add('grow');
+      mark.style.setProperty('--step', rank);
+    }
     cells[index].appendChild(mark);
   });
 
@@ -681,7 +688,9 @@ function buildBoard() {
       cell.classList.add('cell');
       cell.title = `${COLUMN_LABELS[c]}${r + 1}`;
       cell.addEventListener('click', () => onCellClick(r, c));
-      cell.addEventListener('animationend', () => cell.classList.remove('drop', 'capture', 'win-pulse'));
+      cell.addEventListener('animationend', event => {
+        if (event.target === cell) cell.classList.remove('drop', 'capture', 'win-pulse');
+      });
       boardEl.appendChild(cell);
       cells.push(cell);
     }
