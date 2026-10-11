@@ -9,11 +9,11 @@ and the run is captured. Own all four corners of any square (2x2 up to 5x5) and 
 Adapted from [VatsalRaina/CompleteTheSquare](https://github.com/VatsalRaina/CompleteTheSquare).
 
 <p align="center">
-  <img src="docs/img/game.svg" alt="An animated game: before each move the engine's candidate squares pulse, the piece appears, captured pieces fade, the eval bar moves, and green completes a square" width="380">
+  <img src="docs/img/game.svg" alt="An animated game: before each move the engine's candidate squares grow in, the chosen one becomes the piece as it lands, captured pieces swell and fade, the eval bar springs to the new score, and green completes a square" width="380">
 </p>
 
-<p align="center"><sub>A real game, animated from the engine. The orange rings are the engine's top candidates
-before each move, as in the Analysis tab; the bar is its evaluation for green.</sub></p>
+<p align="center"><sub>A real game, animated from the engine with the page's own motion. The see-through squares are the engine's top candidates
+before each move, as when you play the AI; the bar is its evaluation for green.</sub></p>
 
 ## The engine
 
