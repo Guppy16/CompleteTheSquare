@@ -524,7 +524,8 @@ button[hidden] {
   background: var(--blob);             /* a see-through square: a preview of the piece */
   opacity: calc(0.6 * var(--strength, 1));
   pointer-events: none;
-  animation: blob-grow calc(var(--hold, 300ms) * var(--motion)) ease-in-out backwards;
+  animation: blob-grow calc(0.24s * var(--motion)) ease-out
+             calc(55ms * var(--step, 0) * var(--motion)) backwards;
 }
 
 /* The AI's choice shrinks into the piece that lands under it; the rest fade

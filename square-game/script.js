@@ -19,7 +19,7 @@ const ANALYSIS_FIRST_BUDGET = 500000;
 const ANALYSIS_BUDGET = 8000000;       // roughly 3-5 s in the browser
 const ANALYSIS_LINES = 3;              // how many candidate lines to show
 const EVALUATE_BUDGET = 150000;        // per position, for the scores next to each move
-const CANDIDATES_MS = 300;             // how long the AI's candidate blobs show before it plays (times --motion)
+const CANDIDATES_MS = 600;             // how long the AI's candidate blobs show before it plays (times --motion)
 const WIN_DEPTH_BONUS = 0.01;          // as in search.rs: a forced win scores 1 + this per ply to spare
 const WASM_URL = 'square-game/ai.wasm';
 const WORKER_URL = 'square-game/worker.js';
@@ -637,13 +637,13 @@ function showCandidates(index, candidates) {
   const best = candidates.length ? candidates[0].score : 0;
   const shown = [{ index, score: best }, ...candidates.filter(c => c.index !== index)];
   const colour = ai.current_player() === 0 ? 'green' : 'red';
-  shown.forEach(({ index: square, score }) => {
+  shown.forEach(({ index: square, score }, rank) => {
     const gap = Math.abs(best - score);
     const blob = document.createElement('span');
     blob.classList.add('blob', colour);
     blob.style.setProperty('--size', Math.max(0.45, 1 - gap * 4));
     blob.style.setProperty('--strength', Math.max(0.3, 1 - gap * 3));
-    blob.style.setProperty('--hold', `${CANDIDATES_MS}ms`);
+    blob.style.setProperty('--step', rank);
     cells[square].appendChild(blob);
   });
   return new Promise(resolve => setTimeout(resolve, CANDIDATES_MS * motion));

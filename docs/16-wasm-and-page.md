@@ -58,9 +58,10 @@ switch) the answer is dropped.
 
 With the AI's move the worker also returns the three best moves from a quick
 `analyse` (a quarter of the move's budget, starting from the table the search just
-filled). The page shows them as soft blobs that grow for about a fifth of a second while
-the AI "decides"; then the chosen blob shrinks into the piece as it lands and the others
-fade the way a removed piece does, so you can see what the AI weighed.
+filled). The page shows them as see-through squares that grow in, best first, while the
+AI "decides" (about half a second); then the chosen one shrinks into the piece as it
+lands and the others fade the way a removed piece does, so you can see what the AI
+weighed.
 
 Because the worker keeps its own session, its transposition table persists across
 requests, which is what makes the analysis passes and the next move's search build on
