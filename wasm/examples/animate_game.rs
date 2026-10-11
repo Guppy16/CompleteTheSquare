@@ -1,21 +1,20 @@
-//! An animated SVG of a game, for the README, with the page's motion: before
-//! each move the engine's top candidates grow in as see-through squares, the
-//! chosen one shrinks into the piece as it lands with a spring, the others
-//! fade, captured pieces swell and fade rippling out from the move, and a win
-//! pulses its corners, traces a frame round the square and dims the rest.
-//! Loops. GitHub plays SVG (SMIL) animations inline in Markdown.
+//! An animated SVG of a short game, for the README, with the page's motion: a
+//! cursor hovers a square (the hover frame, a ghost piece and any capture
+//! hints appear), moves on to the square it plays (the frame springs across),
+//! and clicks; the piece lands with a spring and captured pieces swell and
+//! fade. A win pulses its corners, traces a frame round the square and dims
+//! the rest. Loops. GitHub plays SVG (SMIL) animations inline in Markdown.
 //!
-//! The timings are the page's (style.css, script.js) times its --motion, and
-//! the spring is the same sampled curve. SMIL has no linear() easing, so the
-//! curve is written out as keyframes, and sizes are animated as x/y/width/
-//! height rather than transforms, which every SVG renderer plays.
+//! Timings are the page's (style.css) times its --motion, and the spring is
+//! the same sampled curve. SMIL has no linear() easing, so the curve is written
+//! out as keyframes, and sizes are animated as x/y/width/height rather than
+//! transforms.
 //!
-//!     cargo run --release --example animate_game -- "1. A1 E1 2. A2 D1 ..." > docs/img/game.svg
+//!     cargo run --release --example animate_game -- "1. A1 B1 2. C1 E5 3. A3 E4 4. C3" > docs/img/game.svg
 
 use complete_the_square_ai::game::{play_move, tables, State};
-use complete_the_square_ai::search::{analyse_position, TranspositionTable};
 
-/// The page's --motion: every duration and delay below is the page's times this.
+/// The page's --motion: every page duration below is scaled by it.
 const MOTION: f64 = 0.75;
 /// The page's --spring (stiffness 170, damping 16), sampled.
 const SPRING: [f64; 21] = [
@@ -23,20 +22,26 @@ const SPRING: [f64; 21] = [
     0.992, 0.993, 0.995, 0.997, 0.999, 1.0,
 ];
 
-const PLY: f64 = 1.3; // seconds per move
-const DECIDE: f64 = 0.6 * MOTION; // candidates show this long before the piece lands (CANDIDATES_MS)
-const GROW: f64 = 0.24 * MOTION; // a candidate growing in
-const GROW_STEP: f64 = 0.055 * MOTION; // between candidates, best first
-const DROP: f64 = 0.5 * MOTION; // a piece landing
-const CHOSEN: f64 = 0.4 * MOTION; // the chosen candidate shrinking into the piece
-const FADE: f64 = 0.3 * MOTION; // a captured piece or dismissed candidate fading
+// The page's timings.
+const DROP: f64 = 0.5 * MOTION; // a piece landing, a ghost springing in
+const SETTLE: f64 = 0.45 * MOTION; // the hover frame and capture hints springing
+const FADE: f64 = 0.3 * MOTION; // a captured piece fading
 const RIPPLE_START: f64 = 0.06 * MOTION; // the first capture after the move
 const RIPPLE_STEP: f64 = 0.07 * MOTION; // each step further from the move
+const FRAME_FADE: f64 = 0.15 * MOTION; // the hover frame appearing or hiding
 const PULSE: f64 = 0.4 * MOTION; // a winning corner's pulse
 const PULSE_STEP: f64 = 0.09 * MOTION; // between corners, clockwise from the top left
-const TRACE_DELAY: f64 = 0.36 * MOTION; // the frame starts after the corners
-const TRACE: f64 = 0.6 * MOTION; // the frame drawing itself
-const HOLD: f64 = 3.0; // seconds on the final position
+const TRACE_DELAY: f64 = 0.36 * MOTION; // the win's frame starts after the corners
+const TRACE: f64 = 0.6 * MOTION; // the win's frame drawing itself
+
+// The cursor's pace (not on the page: this is the player).
+const START: f64 = 0.4; // before the first move
+const TRAVEL: f64 = 0.35; // gliding to the first square it hovers
+const LOOK: f64 = 0.4; // hovering it
+const SLIDE: f64 = 0.22; // moving on to the square it plays
+const AIM: f64 = 0.5; // hovering that square before the click
+const AFTER: f64 = 0.4; // after the click, before the next move
+const HOLD: f64 = 2.5; // on the final position
 const RESET: f64 = 0.6; // fading back to the empty board
 
 const CELL: f64 = 44.0;
@@ -55,6 +60,10 @@ fn name(i: usize) -> String {
 /// Moves a king would need between two squares: the steps along a capture ray.
 fn distance(a: usize, b: usize) -> usize {
     (a / 5).abs_diff(b / 5).max((a % 5).abs_diff(b % 5))
+}
+
+fn centre(c: usize) -> (f64, f64) {
+    (PAD + (c % 5) as f64 * CELL + CELL / 2.0, PAD + (c / 5) as f64 * CELL + CELL / 2.0)
 }
 
 /// SMIL keyTimes/values for one attribute, from (seconds, value) keyframes in
@@ -81,7 +90,7 @@ fn smil(attr: &str, frames: &[(f64, String)], total: f64) -> String {
     )
 }
 
-/// One animated value as keyframes: held flat between changes.
+/// One animated number as keyframes, held flat between changes.
 struct Track(Vec<(f64, f64)>);
 
 impl Track {
@@ -105,18 +114,23 @@ impl Track {
             self.0.push((t + f * dur, v));
         }
     }
-    /// From `t`, jump to `from` and spring to `to` over `dur`.
+    /// Change to `v` at `t`, instantly.
+    fn set(&mut self, t: f64, v: f64) {
+        self.keys(t, 0.0, &[(0.0, v)]);
+    }
+    /// From `t`, spring from `from` to `to` over `dur`.
     fn spring(&mut self, t: f64, dur: f64, from: f64, to: f64) {
-        let n = SPRING.len() - 1;
+        let n = (SPRING.len() - 1) as f64;
         let points: Vec<(f64, f64)> =
-            SPRING.iter().enumerate().map(|(k, s)| (k as f64 / n as f64, from + (to - from) * s)).collect();
+            SPRING.iter().enumerate().map(|(k, s)| (k as f64 / n, from + (to - from) * s)).collect();
         self.keys(t, dur, &points);
     }
-    /// From `t`, ease out to `to` over `dur`.
-    fn ease_out(&mut self, t: f64, dur: f64, to: f64) {
+    /// From `t`, ease in and out to `to` over `dur`.
+    fn ease(&mut self, t: f64, dur: f64, to: f64) {
         let from = self.last();
+        let smooth = |f: f64| f * f * (3.0 - 2.0 * f);
         let points: Vec<(f64, f64)> =
-            (0..=6).map(|k| k as f64 / 6.0).map(|f| (f, from + (to - from) * (1.0 - (1.0 - f).powi(2)))).collect();
+            (0..=8).map(|k| k as f64 / 8.0).map(|f| (f, from + (to - from) * smooth(f))).collect();
         self.keys(t, dur, &points);
     }
     fn frames(&self, f: impl Fn(f64) -> String) -> Vec<(f64, String)> {
@@ -124,6 +138,13 @@ impl Track {
     }
     fn changes(&self) -> bool {
         self.0.iter().any(|&(_, v)| v != self.0[0].1)
+    }
+    fn svg(&self, attr: &str, total: f64) -> String {
+        if self.changes() {
+            smil(attr, &self.frames(|v| format!("{v:.2}")), total)
+        } else {
+            String::new()
+        }
     }
 }
 
@@ -144,8 +165,8 @@ impl Colour {
     }
 }
 
-/// A square of `size` (scaled by `scale`) centred on (cx, cy): x, y, width and
-/// height animations, or nothing if the scale never changes.
+/// A square of side `size` scaled by `scale` about (cx, cy): its x, y, width
+/// and height animations (nothing if the scale never changes).
 fn scaled(cx: f64, cy: f64, size: f64, scale: &Track, total: f64) -> String {
     if !scale.changes() {
         return String::new();
@@ -161,6 +182,31 @@ fn scaled(cx: f64, cy: f64, size: f64, scale: &Track, total: f64) -> String {
     .concat()
 }
 
+/// An empty square next to `target`, the one nearest `from`: where the
+/// cursor hovers before moving on to the square it plays.
+fn neighbour(state: &State, target: usize, from: (f64, f64)) -> usize {
+    let (tr, tc) = ((target / 5) as i32, (target % 5) as i32);
+    let mut best = target;
+    let mut best_d = f64::INFINITY;
+    for (dr, dc) in [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)] {
+        let (r, c) = (tr + dr, tc + dc);
+        if !(0..5).contains(&r) || !(0..5).contains(&c) {
+            continue;
+        }
+        let sq = (r * 5 + c) as usize;
+        if state.occupied() & (1 << sq) != 0 {
+            continue;
+        }
+        let (x, y) = centre(sq);
+        let d = (x - from.0).hypot(y - from.1);
+        if d < best_d {
+            best = sq;
+            best_d = d;
+        }
+    }
+    best
+}
+
 fn main() {
     let moves_arg = std::env::args().nth(1).expect("pass a move list");
     let moves: Vec<usize> = moves_arg
@@ -172,20 +218,11 @@ fn main() {
         })
         .collect();
     let t = tables();
-    let tt = TranspositionTable::new();
 
-    // Play the game, recording each position, the engine's top candidates and
-    // their scores before each move, and the win.
     let mut states = vec![State::new()];
-    let mut candidates: Vec<Vec<(usize, f64)>> = Vec::new();
-    let mut history = vec![State::new().key()];
     let mut win_mask = 0u32;
     for &m in &moves {
-        let s = *states.last().unwrap();
-        let (cands, _) = analyse_position(&s, 8, 600_000, &history, &tt);
-        candidates.push(cands.iter().take(3).map(|c| (c.bit.trailing_zeros() as usize, c.score)).collect());
-        let (next, won) = play_move(t, 1 << m, &s);
-        history.push(next.key());
+        let (next, won) = play_move(t, 1 << m, states.last().unwrap());
         states.push(next);
         if let Some(mask) = won {
             win_mask = mask;
@@ -193,42 +230,83 @@ fn main() {
         }
     }
     let n = states.len() - 1;
-    let land = |i: usize| i as f64 * PLY + DECIDE; // when move i's piece lands
-    let win_at = land(n - 1);
-    let reset = land(n - 1) + HOLD;
-    let total = reset + RESET + 0.2;
+    // What a move at `sq` would capture from `state`.
+    let captures = |state: &State, sq: usize| {
+        let theirs = state.boards[1 - state.current];
+        theirs & !play_move(t, 1 << sq, state).0.boards[1 - state.current]
+    };
 
-    // The squares: colour, scale and (for the win) opacity.
     let mut colour: Vec<Colour> = (0..25).map(|_| Colour::new(EMPTY)).collect();
     let mut scale: Vec<Track> = (0..25).map(|_| Track::new(1.0)).collect();
-    let mut opacity: Vec<Track> = (0..25).map(|_| Track::new(1.0)).collect();
+    let mut dim: Vec<Track> = (0..25).map(|_| Track::new(1.0)).collect();
+    let rest = (PAD + 5.0 * CELL - 8.0, PAD + 5.0 * CELL + 14.0); // the cursor between loops
+    let (mut cursor_x, mut cursor_y) = (Track::new(rest.0), Track::new(rest.1));
+    let (mut frame_x, mut frame_y, mut frame_op) = (Track::new(0.0), Track::new(0.0), Track::new(0.0));
+    let mut ghosts = Vec::new(); // (square, colour, appear, leave)
+    let mut hints = Vec::new(); // (square, appear, leave)
+    let mut clicks = Vec::new();
+    let mut now = START;
+
     for i in 0..n {
         let (before, after, m) = (states[i], states[i + 1], moves[i]);
-        let t0 = land(i);
+        let mover = if before.current == 0 { GREEN } else { RED };
+        let first = neighbour(&before, m, (cursor_x.last(), cursor_y.last()));
+        let hovers = if first == m { vec![(m, TRAVEL)] } else { vec![(first, TRAVEL), (m, SLIDE)] };
+        for (k, &(sq, travel)) in hovers.iter().enumerate() {
+            let (x, y) = centre(sq);
+            cursor_x.ease(now, travel, x + 4.0);
+            cursor_y.ease(now, travel, y + 4.0);
+            let arrive = now + travel;
+            // The frame fades in where it is if it was hidden, else springs across.
+            let (fx, fy) = (x - SQUARE / 2.0, y - SQUARE / 2.0);
+            if frame_op.last() == 0.0 {
+                frame_x.set(arrive, fx);
+                frame_y.set(arrive, fy);
+                frame_op.keys(arrive, FRAME_FADE, &[(1.0, 0.7)]);
+            } else {
+                frame_x.spring(arrive, SETTLE, frame_x.last(), fx);
+                frame_y.spring(arrive, SETTLE, frame_y.last(), fy);
+            }
+            let leave = arrive + if k + 1 < hovers.len() { LOOK } else { AIM };
+            ghosts.push((sq, mover, arrive, leave));
+            let hinted = captures(&before, sq);
+            for c in (0..25).filter(|c| hinted & (1 << c) != 0) {
+                hints.push((c, arrive, leave));
+                let from = scale[c].last();
+                scale[c].spring(arrive, SETTLE, from, 0.8);
+                if sq != m {
+                    scale[c].spring(leave, SETTLE, 0.8, 1.0);
+                }
+            }
+            now = leave;
+        }
+        // The click: the piece lands, captures ripple out, the frame hides.
+        let click = now;
+        clicks.push(click);
+        frame_op.keys(click, FRAME_FADE, &[(1.0, 0.0)]);
         for c in 0..25 {
             let bit = 1u32 << c;
             if before.occupied() & bit == 0 && after.occupied() & bit != 0 {
-                // lands with a spring
-                colour[c].to(t0, 0.0, if after.boards[0] & bit != 0 { GREEN } else { RED });
-                scale[c].spring(t0, DROP, 0.5, 1.0);
+                colour[c].to(click, 0.0, mover);
+                scale[c].spring(click, DROP, 0.5, 1.0);
             } else if before.occupied() & bit != 0 && after.occupied() & bit == 0 {
-                // captured: swells in its colour, then fades, rippling from the move
-                let tc = t0 + RIPPLE_START + RIPPLE_STEP * (distance(m, c) as f64 - 1.0);
+                let tc = click + RIPPLE_START + RIPPLE_STEP * (distance(m, c) as f64 - 1.0);
+                let from = scale[c].last();
                 colour[c].to(tc + 0.3 * FADE, 0.7 * FADE, EMPTY);
-                scale[c].keys(tc, FADE, &[(0.3, 1.12), (1.0, 1.0)]);
+                scale[c].keys(tc, FADE, &[(0.0, from), (0.3, 1.12), (1.0, 1.0)]);
             }
         }
+        now = click + AFTER;
     }
 
     // The win: corners pulse clockwise from the top left (the corner just
-    // played lands instead), the rest of the board dims.
+    // played lands instead), the rest of the board dims, a frame is traced.
+    let win_at = *clicks.last().unwrap();
+    let reset = win_at + HOLD;
     let corners: Vec<usize> = (0..25).filter(|c| win_mask & (1 << c) != 0).collect();
     if let (Some(&top_left), Some(&bottom_right)) = (corners.first(), corners.last()) {
         let (top, right) = (top_left / 5, bottom_right % 5);
-        for &c in &corners {
-            if c == moves[n - 1] {
-                continue;
-            }
+        for &c in corners.iter().filter(|&&c| c != moves[n - 1]) {
             let step = match (c / 5 == top, c % 5 == right) {
                 (true, false) => 0.0,
                 (true, true) => 1.0,
@@ -238,17 +316,20 @@ fn main() {
             scale[c].keys(win_at + PULSE_STEP * step, PULSE, &[(0.4, 1.18), (1.0, 1.0)]);
         }
         for c in (0..25).filter(|c| win_mask & (1 << c) == 0) {
-            opacity[c].keys(win_at + TRACE_DELAY, 0.4 * MOTION, &[(1.0, 0.4)]);
-            opacity[c].keys(reset, RESET, &[(1.0, 1.0)]);
+            dim[c].keys(win_at + TRACE_DELAY, 0.4 * MOTION, &[(1.0, 0.4)]);
+            dim[c].keys(reset, RESET, &[(1.0, 1.0)]);
         }
     }
-    for c in 0..25 {
-        colour[c].to(reset, RESET, EMPTY);
+    for c in colour.iter_mut() {
+        c.to(reset, RESET, EMPTY);
     }
+    cursor_x.ease(reset, RESET, rest.0);
+    cursor_y.ease(reset, RESET, rest.1);
+    let total = reset + RESET + 0.3;
 
     let board = 5.0 * CELL;
     let width = PAD + board + PAD;
-    let height = PAD + board + 56.0;
+    let height = PAD + board + 44.0;
     let mut out = format!(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width:.0}\" height=\"{height:.0}\" viewBox=\"0 0 {width:.0} {height:.0}\" font-family=\"system-ui, sans-serif\">\n<rect width=\"100%\" height=\"100%\" rx=\"10\" fill=\"#121212\"/>\n"
     );
@@ -264,58 +345,52 @@ fn main() {
             c + 1
         ));
     }
-    let centre = |c: usize| (PAD + (c % 5) as f64 * CELL + CELL / 2.0, PAD + (c / 5) as f64 * CELL + CELL / 2.0);
     for c in 0..25 {
         let (cx, cy) = centre(c);
-        let dim = if opacity[c].changes() { smil("opacity", &opacity[c].frames(|v| format!("{v:.2}")), total) } else { String::new() };
         out.push_str(&format!(
-            "<rect x=\"{:.0}\" y=\"{:.0}\" width=\"{SQUARE:.0}\" height=\"{SQUARE:.0}\" fill=\"{EMPTY}\">{}{}{dim}</rect>\n",
+            "<rect x=\"{:.0}\" y=\"{:.0}\" width=\"{SQUARE:.0}\" height=\"{SQUARE:.0}\" fill=\"{EMPTY}\">{}{}{}</rect>\n",
             cx - SQUARE / 2.0,
             cy - SQUARE / 2.0,
             smil("fill", &colour[c].0, total),
             scaled(cx, cy, SQUARE, &scale[c], total),
+            dim[c].svg("opacity", total),
         ));
     }
 
-    // The candidates: see-through squares in the mover's colour, larger and
-    // stronger the closer each is to the best (as on the page). The move
-    // played is shown as the best.
-    for (i, cands) in candidates.iter().enumerate() {
-        let t0 = land(i) - DECIDE;
-        let best = cands.first().map_or(0.0, |&(_, s)| s);
-        let mut shown = vec![(moves[i], best)];
-        shown.extend(cands.iter().copied().filter(|&(c, _)| c != moves[i]));
-        let fill = if i % 2 == 0 { GREEN } else { RED };
-        for (rank, &(c, score)) in shown.iter().enumerate() {
-            let gap = (best - score).abs();
-            let size = 0.6 * SQUARE * (1.0 - gap * 4.0).max(0.45);
-            let peak = 0.6 * (1.0 - gap * 3.0).max(0.3);
-            let start = t0 + GROW_STEP * rank as f64;
-            let (mut k, mut op) = (Track::new(0.2), Track::new(0.0));
-            k.ease_out(start, GROW, 1.0);
-            op.ease_out(start, GROW, peak);
-            if rank == 0 {
-                k.ease_out(land(i), CHOSEN, 0.5);
-                op.ease_out(land(i), CHOSEN, 0.0);
-            } else {
-                k.keys(land(i), FADE, &[(0.3, 1.12), (1.0, 0.8)]);
-                op.keys(land(i), FADE, &[(0.3, peak), (1.0, 0.0)]);
-            }
-            let (cx, cy) = centre(c);
-            out.push_str(&format!(
-                "<rect x=\"{cx:.0}\" y=\"{cy:.0}\" width=\"0\" height=\"0\" fill=\"{fill}\" opacity=\"0\">{}{}</rect>\n",
-                scaled(cx, cy, size, &k, total),
-                smil("opacity", &op.frames(|v| format!("{v:.3}")), total)
-            ));
-        }
+    // Ghosts: a faint piece springing into each hovered square.
+    for &(sq, fill, appear, leave) in &ghosts {
+        let (cx, cy) = centre(sq);
+        let mut k = Track::new(0.5);
+        k.spring(appear, DROP, 0.5, 1.0);
+        let mut op = Track::new(0.0);
+        op.set(appear, 0.3);
+        op.set(leave, 0.0);
+        out.push_str(&format!(
+            "<rect x=\"{cx:.0}\" y=\"{cy:.0}\" width=\"0\" height=\"0\" fill=\"{fill}\" opacity=\"0\">{}{}</rect>\n",
+            scaled(cx, cy, SQUARE, &k, total),
+            op.svg("opacity", total)
+        ));
     }
-
+    // Capture hints: a dashed outline round each piece the hovered move would take.
+    for &(c, appear, leave) in &hints {
+        let (cx, cy) = centre(c);
+        let side = SQUARE * 0.8 + 6.0;
+        let mut op = Track::new(0.0);
+        op.set(appear, 1.0);
+        op.set(leave, 0.0);
+        out.push_str(&format!(
+            "<rect x=\"{:.1}\" y=\"{:.1}\" width=\"{side:.1}\" height=\"{side:.1}\" fill=\"none\" stroke=\"{ACCENT}\" stroke-width=\"2\" stroke-dasharray=\"5 3\" opacity=\"0\">{}</rect>\n",
+            cx - side / 2.0,
+            cy - side / 2.0,
+            op.svg("opacity", total)
+        ));
+    }
     // The last move: a soft white inner outline, as on the page.
     for (i, &m) in moves.iter().take(n).enumerate() {
         let mut op = Track::new(0.0);
-        op.keys(land(i), 0.0, &[(0.0, 1.0)]);
+        op.set(clicks[i], 1.0);
         if i + 1 < n {
-            op.keys(land(i + 1), 0.0, &[(0.0, 0.0)]);
+            op.set(clicks[i + 1], 0.0);
         } else {
             op.keys(reset, RESET, &[(1.0, 0.0)]);
         }
@@ -326,54 +401,72 @@ fn main() {
             cy - SQUARE / 2.0 + 1.5,
             SQUARE - 3.0,
             SQUARE - 3.0,
-            smil("opacity", &op.frames(|v| format!("{v:.2}")), total)
+            op.svg("opacity", total)
         ));
     }
 
-    // The win's frame: drawn round the square's corners, just outside them.
+    // The hover frame, springing between squares.
+    out.push_str(&format!(
+        "<rect x=\"0\" y=\"0\" width=\"{SQUARE:.0}\" height=\"{SQUARE:.0}\" fill=\"none\" stroke=\"#e6e6e6\" stroke-width=\"2\" opacity=\"0\">{}{}{}</rect>\n",
+        frame_x.svg("x", total),
+        frame_y.svg("y", total),
+        frame_op.svg("opacity", total)
+    ));
+
+    // The win's frame: traced round the square's corners, just outside them.
     if let (Some(&first), Some(&last)) = (corners.first(), corners.last()) {
         let (x0, y0) = (centre(first).0 - SQUARE / 2.0 - 5.0, centre(first).1 - SQUARE / 2.0 - 5.0);
         let (x1, y1) = (centre(last).0 + SQUARE / 2.0 + 5.0, centre(last).1 + SQUARE / 2.0 + 5.0);
         let start = win_at + TRACE_DELAY;
         let mut dash = Track::new(100.0);
-        dash.ease_out(start, TRACE, 0.0);
+        dash.ease(start, TRACE, 0.0);
         let mut op = Track::new(0.0);
-        op.keys(start, 0.0, &[(0.0, 1.0)]);
+        op.set(start, 1.0);
         op.keys(reset, RESET, &[(1.0, 0.0)]);
         out.push_str(&format!(
             "<rect x=\"{x0:.1}\" y=\"{y0:.1}\" width=\"{:.1}\" height=\"{:.1}\" fill=\"none\" stroke=\"{ACCENT}\" stroke-width=\"3\" stroke-linecap=\"square\" pathLength=\"100\" stroke-dasharray=\"100\" stroke-dashoffset=\"100\" opacity=\"0\">{}{}</rect>\n",
             x1 - x0,
             y1 - y0,
-            smil("stroke-dashoffset", &dash.frames(|v| format!("{v:.1}")), total),
-            smil("opacity", &op.frames(|v| format!("{v:.2}")), total)
+            dash.svg("stroke-dashoffset", total),
+            op.svg("opacity", total)
         ));
     }
 
-    // Caption: the move just played, one text per ply.
+    // Caption: the move just played.
     let cap_y = PAD + board + 30.0;
     for i in 0..n {
-        let ply = i + 1;
         let num = if i % 2 == 0 { format!("{}.", i / 2 + 1) } else { format!("{}...", i / 2 + 1) };
         let side = if i % 2 == 0 { "Green" } else { "Red" };
-        let captured = states[i].occupied() & !states[ply].occupied() & !(1u32 << moves[i]);
+        let captured = states[i].occupied() & !states[i + 1].occupied();
         let lost: Vec<String> = (0..25).filter(|c| captured & (1 << c) != 0).map(name).collect();
         let mut caption = format!("{num} {side} {}", name(moves[i]));
         if !lost.is_empty() {
             caption.push_str(&format!(" captures {}", lost.join(", ")));
         }
-        if ply == n && win_mask != 0 {
+        if i + 1 == n && win_mask != 0 {
             caption = format!("{num} {side} {} completes the square", name(moves[i]));
         }
         let mut op = Track::new(0.0);
-        op.keys(land(i), 0.05, &[(1.0, 1.0)]);
-        let off = if ply == n { reset } else { land(i + 1) };
+        op.keys(clicks[i], 0.05, &[(1.0, 1.0)]);
+        let off = if i + 1 == n { reset } else { clicks[i + 1] };
         op.keys(off, 0.05, &[(1.0, 0.0)]);
         out.push_str(&format!(
             "<text x=\"{:.0}\" y=\"{cap_y:.0}\" fill=\"#e6e6e6\" font-size=\"14\" text-anchor=\"middle\" opacity=\"0\">{caption}{}</text>\n",
             PAD + board / 2.0,
-            smil("opacity", &op.frames(|v| format!("{v:.2}")), total)
+            op.svg("opacity", total)
         ));
     }
+
+    // The cursor, on top of everything: an arrow whose tip follows the moves.
+    // Its x and y tracks are always moved together, so their keyframes pair up.
+    let pos: Vec<(f64, String)> =
+        cursor_x.0.iter().zip(&cursor_y.0).map(|(&(t, x), &(_, y))| (t, format!("{x:.1} {y:.1}"))).collect();
+    let translate = smil("transform", &pos, total)
+        .replace("<animate attributeName=\"transform\"", "<animateTransform attributeName=\"transform\" type=\"translate\"");
+    out.push_str(&format!(
+        "<g transform=\"translate({:.1} {:.1})\"><path d=\"M0 0 L0 17 L4.6 12.6 L7.7 19.4 L10.4 18.2 L7.4 11.6 L13 11.6 Z\" fill=\"#ffffff\" stroke=\"#121212\" stroke-width=\"1.2\" stroke-linejoin=\"round\"/>{translate}</g>\n",
+        rest.0, rest.1
+    ));
     out.push_str("</svg>\n");
     print!("{out}");
 }
