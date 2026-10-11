@@ -19,6 +19,7 @@ Every export takes and returns plain integers, so the page needs no glue library
 | `board(p)` | bitboard of player `p`'s pieces |
 | `board_at(ply, p)` | the same after the first `ply` moves (for the move-list pictures) |
 | `board_after(green, red, mover, square, p)` | player `p`'s board after a hypothetical move, without touching the game (for the pictures in the analysis markers) |
+| `captures_if(square)` | the opponent's pieces the side to move would capture there (for the hover preview) |
 | `current_player()` | 0 or 1 |
 | `winner()` | winner's index, or -1 while the game runs |
 | `winning_mask()` | corner mask of the completed square, for highlighting |

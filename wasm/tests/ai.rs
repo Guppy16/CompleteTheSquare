@@ -261,3 +261,16 @@ fn board_after_plays_a_hypothetical_move() {
     assert_eq!(board_after(a1, b1, 0, 0, 0), a1);
     assert_eq!(board_after(a1, b1, 0, 99, 1), b1);
 }
+
+#[test]
+fn captures_if_previews_without_playing() {
+    use complete_the_square_ai::{board, captures_if, play, reset};
+    reset();
+    play(0, 0); // green A1
+    play(0, 1); // red B1
+    // Green at C1 would capture B1; the game is unchanged by asking.
+    assert_eq!(captures_if(2), square_bit(0, 1));
+    assert_eq!(board(1), square_bit(0, 1));
+    assert_eq!(captures_if(12), 0); // C3 captures nothing
+    assert_eq!(captures_if(0), 0); // A1 is taken
+}

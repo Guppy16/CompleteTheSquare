@@ -189,6 +189,32 @@ h1 {
   }
 }
 
+/* Hover preview: a faint piece of the side to move springs in, and each
+   piece that move would capture springs down, as if about to go, with a
+   dashed outline. */
+.cell.ghost-W::after,
+.cell.ghost-B::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.3;
+  pointer-events: none;
+  animation: drop calc(0.5s * var(--motion)) var(--spring);
+}
+
+.cell.ghost-W::after { background: var(--green); }
+.cell.ghost-B::after { background: var(--red); }
+
+.cell {
+  transition: transform calc(0.45s * var(--motion)) var(--spring);
+}
+
+.cell.would-capture {
+  transform: scale(0.8);
+  outline: 2px dashed var(--accent);
+  outline-offset: 3px;
+}
+
 /* Player colours */
 .cell.player-W {
   background-color: var(--green);

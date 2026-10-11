@@ -308,6 +308,23 @@ pub extern "C" fn board_at(ply: u32, player: u32) -> u32 {
     })
 }
 
+/// The opponent's pieces the side to move would capture by playing `square`
+/// now (a bitboard), for the page's hover preview. 0 if the square is taken
+/// or off the board, or the game is over.
+#[no_mangle]
+pub extern "C" fn captures_if(square: u32) -> u32 {
+    SESSION.with(|s| {
+        let s = s.borrow();
+        let state = s.state();
+        let bit = 1u32.checked_shl(square).unwrap_or(0) & ((1 << (ROWS * COLS)) - 1);
+        if s.over() || bit == 0 || state.occupied() & bit != 0 {
+            return 0;
+        }
+        let theirs = state.boards[1 - state.current];
+        theirs & !play_move(tables(), bit, &state).0.boards[1 - state.current]
+    })
+}
+
 /// `player`'s bitboard after `mover` plays `square` in the position with
 /// boards (`green`, `red`), or that board unchanged if the square is taken or
 /// off the board. Stateless, so the page can draw the positions along an

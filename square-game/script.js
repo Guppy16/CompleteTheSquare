@@ -187,7 +187,8 @@ function render() {
     const bit = 1 << i;
     // Animation classes stay until the animation ends (see buildBoard), so a
     // quick second render, such as the AI's reply, does not cut one short.
-    cell.classList.remove('player-W', 'player-B', 'disabled', 'winner', 'last', 'hint');
+    cell.classList.remove('player-W', 'player-B', 'disabled', 'winner', 'last', 'hint',
+                          'ghost-W', 'ghost-B', 'would-capture');
     // Drops analysis markers and candidate blobs, except blobs mid-exit,
     // which remove themselves when their animation ends.
     cell.querySelectorAll('.mark, .mini-eval, .blob:not(.leaving)').forEach(el => el.remove());
@@ -239,6 +240,22 @@ function animate(cell, name, step = 0) {
   void cell.offsetWidth;               // forces a style flush so re-adding restarts it
   cell.style.setProperty('--step', step);
   cell.classList.add(name);
+}
+
+// Hovering an empty square (with a mouse) shows a faint piece of the side to
+// move there and the pieces that move would capture. Not while the AI moves.
+function showPreview(index) {
+  clearPreview();
+  if (!ai || isAITurn() || gameOver()) return;
+  const occupied = ai.board(0) | ai.board(1);
+  if (occupied & (1 << index)) return;
+  cells[index].classList.add(`ghost-${COLOURS[ai.current_player()]}`);
+  const captured = ai.captures_if(index);
+  cells.forEach((cell, i) => { if (captured & (1 << i)) cell.classList.add('would-capture'); });
+}
+
+function clearPreview() {
+  cells.forEach(cell => cell.classList.remove('ghost-W', 'ghost-B', 'would-capture'));
 }
 
 // The rows and columns a completed square's corners sit on.
@@ -791,6 +808,10 @@ function buildBoard() {
       cell.classList.add('cell');
       cell.title = `${COLUMN_LABELS[c]}${r + 1}`;
       cell.addEventListener('click', () => onCellClick(r, c));
+      cell.addEventListener('pointerenter', event => {
+        if (event.pointerType === 'mouse') showPreview(r * BOARD_SIZE + c);
+      });
+      cell.addEventListener('pointerleave', clearPreview);
       cell.addEventListener('animationend', event => {
         if (event.target === cell) cell.classList.remove('drop', 'capture', 'win-pulse');
       });
