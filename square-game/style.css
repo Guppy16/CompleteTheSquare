@@ -458,12 +458,14 @@ button[hidden] {
   font-weight: 600;
 }
 
-/* Board with the analysis eval bar to its left */
+/* Board with the analysis eval bar to its right */
 #board-area {
+  --eval-width: 2.8rem;
+  --eval-gap: 8px;
   display: flex;
   align-items: stretch;
   justify-content: center;
-  gap: 8px;
+  gap: var(--eval-gap);
   width: min(100%, var(--board-max));
 }
 
@@ -480,7 +482,20 @@ button[hidden] {
   gap: 4px;
   margin: 20px 0;
   flex: 0 0 auto;
-  width: 2.8rem;                       /* fixed, so the board does not resize as the number changes */
+  width: var(--eval-width);            /* fixed, so the board does not resize as the number changes */
+}
+
+/* An empty column as wide as the eval column, on the board's other side,
+   keeps the board centred while the eval bar shows. */
+#board-area:has(> #eval-column:not([hidden]))::before {
+  content: '';
+  flex: 0 0 var(--eval-width);
+}
+
+/* ... and the area widens by both columns and their gaps, so the board
+   itself keeps the size it has in the other tabs. */
+#board-area:has(> #eval-column:not([hidden])) {
+  width: min(100%, calc(var(--board-max) + 2 * (var(--eval-width) + var(--eval-gap))));
 }
 
 #eval-column[hidden] {
