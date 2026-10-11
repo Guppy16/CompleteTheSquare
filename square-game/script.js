@@ -41,7 +41,7 @@ const pasteButton = document.getElementById('paste-moves');
 const moveListEl = document.getElementById('move-list');
 const analysisEl = document.getElementById('analysis');
 const evalColumn = document.getElementById('eval-column');
-const evalFill = document.getElementById('eval-fill');
+const evalBar = document.getElementById('eval-bar');
 const evalText = document.getElementById('eval-text');
 const sideSelect = document.getElementById('side-select');
 const aiFirstBox = document.getElementById('ai-first');
@@ -436,7 +436,7 @@ function renderAnalysis(lines, depth, settled, book = -1) {
   const ply = ai.move_count();
   const toMove = ai.current_player();
 
-  evalFill.style.height = evalShare(best);
+  evalBar.style.setProperty('--share', evalShare(best));
   evalText.textContent = scoreText(best, depth);
 
   // The book move, if any, is shown first: it comes from a depth-14 offline
@@ -465,9 +465,7 @@ function renderAnalysis(lines, depth, settled, book = -1) {
     const bar = document.createElement('span');
     bar.classList.add('mini-eval');
     bar.style.opacity = opacity.toFixed(2);
-    const fill = document.createElement('span');
-    fill.style.height = evalShare(greenScore(score));
-    bar.appendChild(fill);
+    bar.style.setProperty('--share', evalShare(greenScore(score)));
     cells[index].appendChild(bar);
     if (!wasMarked[index]) {
       mark.classList.add('grow');
