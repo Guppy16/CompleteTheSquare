@@ -99,9 +99,12 @@ function moveText() {
 // A tiny picture of the position after `ply` half-moves, with the squares
 // of the plies in `lastMoves` in the brighter shade.
 function miniBoard(ply, lastMoves) {
+  return miniBoardOf([ai.board_at(ply, 0), ai.board_at(ply, 1)], lastMoves);
+}
+
+function miniBoardOf(boards, lastMoves) {
   const mini = document.createElement('span');
   mini.classList.add('mini-board');
-  const boards = [ai.board_at(ply, 0), ai.board_at(ply, 1)];
   for (let i = 0; i < BOARD_SIZE * BOARD_SIZE; i++) {
     const cell = document.createElement('span');
     const bit = 1 << i;
@@ -367,6 +370,18 @@ function lineText(squares, ply) {
   return parts.join(' ');
 }
 
+// A mini board of where a line ends, its last move pair highlighted. The
+// positions come from board_after, so the game itself is untouched.
+function lineEndBoard(squares) {
+  let boards = [ai.board(0), ai.board(1)];
+  let mover = ai.current_player();
+  squares.forEach(square => {
+    boards = [0, 1].map(player => ai.board_after(boards[0], boards[1], mover, square, player));
+    mover = 1 - mover;
+  });
+  return miniBoardOf(boards, squares.slice(-2));
+}
+
 let analysisBudget = 0;                // budget of the last completed pass
 let analysisCap = ANALYSIS_BUDGET;     // "Go deeper" raises it
 let analysisRunning = false;
@@ -410,15 +425,18 @@ function goDeeper() {
   if (!analysisRunning) continueAnalysis(analysisBudget * 2);
 }
 
+// An eval bar's green part for a score: half for level, all for a forced win.
+function evalShare(green) {
+  return `${50 + 50 * Math.max(-1, Math.min(1, green))}%`;
+}
+
 function renderAnalysis(lines, depth, settled, book = -1) {
   const top = lines.slice(0, ANALYSIS_LINES);
   const best = top.length ? greenScore(top[0].score) : 0;
   const ply = ai.move_count();
   const toMove = ai.current_player();
 
-  // Eval bar: Green's share, forced wins fill it completely.
-  const clamped = Math.max(-1, Math.min(1, best));
-  evalFill.style.height = `${50 + 50 * clamped}%`;
+  evalFill.style.height = evalShare(best);
   evalText.textContent = scoreText(best, depth);
 
   // The book move, if any, is shown first: it comes from a depth-14 offline
@@ -432,18 +450,25 @@ function renderAnalysis(lines, depth, settled, book = -1) {
   // the rest in place.
   const wasMarked = cells.map(cell => cell.querySelector('.mark') !== null);
   cells.forEach(cell => cell.textContent = '');
-  shown.forEach(({ index, score }, rank) => {
+  shown.forEach(({ index, score, line }, rank) => {
     const gap = index === book ? 0 : Math.abs(top[0].score - score);
     const size = Math.max(0.55, 1 - gap * 4);          // 0.11 behind: about half size
     const opacity = Math.max(0.45, 1 - gap * 3);
     const mark = document.createElement('span');
     mark.classList.add('mark', toMove === 0 ? 'green' : 'red');
     if (index === book) mark.classList.add('book');
-    mark.style.width = `${Math.round(72 * size)}%`;
-    mark.style.height = `${Math.round(72 * size)}%`;
-    mark.style.fontSize = `${(0.7 * size).toFixed(2)}rem`;
+    mark.style.width = `${Math.round(66 * size)}%`;
     mark.style.opacity = opacity.toFixed(2);
-    mark.textContent = scoreText(greenScore(score), depth);
+    mark.appendChild(lineEndBoard(line));
+    // The line's score: a small eval bar on the square's right edge (on the
+    // cell, not the marker, so the marker's grow-in does not move it).
+    const bar = document.createElement('span');
+    bar.classList.add('mini-eval');
+    bar.style.opacity = opacity.toFixed(2);
+    const fill = document.createElement('span');
+    fill.style.height = evalShare(greenScore(score));
+    bar.appendChild(fill);
+    cells[index].appendChild(bar);
     if (!wasMarked[index]) {
       mark.classList.add('grow');
       mark.style.setProperty('--step', rank);

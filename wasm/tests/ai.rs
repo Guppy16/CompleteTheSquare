@@ -249,3 +249,15 @@ fn opening_book_replies_through_symmetry() {
     assert_eq!(reply(position(&[(4, 4)], &[], 1)), Some((3, 3)));
     assert_eq!(reply(position(&[(0, 0), (1, 1)], &[], 0)), None);
 }
+
+#[test]
+fn board_after_plays_a_hypothetical_move() {
+    use complete_the_square_ai::board_after;
+    let (a1, b1, c1) = (square_bit(0, 0), square_bit(0, 1), square_bit(0, 2));
+    // Green at A1 plays C1 over red's B1: B1 is captured.
+    assert_eq!(board_after(a1, b1, 0, 2, 0), a1 | c1);
+    assert_eq!(board_after(a1, b1, 0, 2, 1), 0);
+    // Taken or off-board squares leave the position as it was.
+    assert_eq!(board_after(a1, b1, 0, 0, 0), a1);
+    assert_eq!(board_after(a1, b1, 0, 99, 1), b1);
+}

@@ -308,6 +308,18 @@ pub extern "C" fn board_at(ply: u32, player: u32) -> u32 {
     })
 }
 
+/// `player`'s bitboard after `mover` plays `square` in the position with
+/// boards (`green`, `red`), or that board unchanged if the square is taken or
+/// off the board. Stateless, so the page can draw the positions along an
+/// analysis line without touching the game.
+#[no_mangle]
+pub extern "C" fn board_after(green: u32, red: u32, mover: u32, square: u32, player: u32) -> u32 {
+    let state = State { boards: [green, red], current: mover as usize & 1 };
+    let bit = 1u32.checked_shl(square).unwrap_or(0) & ((1 << (ROWS * COLS)) - 1);
+    let after = if bit == 0 || state.occupied() & bit != 0 { state } else { play_move(tables(), bit, &state).0 };
+    after.boards.get(player as usize).copied().unwrap_or(0)
+}
+
 /// Number of undone moves that `redo` can replay.
 #[no_mangle]
 pub extern "C" fn redo_count() -> u32 {

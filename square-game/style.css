@@ -135,6 +135,7 @@ h1 {
 }
 
 .cell {
+  position: relative;                  /* for the analysis markers' eval bars */
   aspect-ratio: 1 / 1;
   background: var(--surface-2);
   border: 1px solid var(--border);
@@ -376,9 +377,21 @@ button[hidden] {
 }
 
 /* Candidate-move markers on the board: size and opacity show the gap to the
-   best move; the book move gets a white outline. */
+   best move; the book move gets a white outline. Each holds a mini board of
+   where its line ends, scaled to the marker. */
+.cell .mark .mini-board {
+  flex: 1 1 auto;
+  grid-template-columns: repeat(var(--board-size), 1fr);
+}
+
+.cell .mark .mini-board span {
+  width: auto;
+  height: auto;
+  aspect-ratio: 1;
+}
+
 .cell .mark.book {
-  box-shadow: 0 0 0 2px #fff;
+  box-shadow: 0 0 0 2px #fff, 0 0 6px 2px var(--glow);
 }
 
 #analysis .tag {
@@ -391,16 +404,35 @@ button[hidden] {
 }
 
 .cell .mark {
-  width: 72%;
-  height: 72%;
-  border-radius: 4px;
+  width: 66%;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: #fff;
+  box-shadow: 0 0 5px 1px var(--glow);
   pointer-events: none;
+}
+
+/* The glow is the colour of the side that would play the move. */
+.cell .mark.green { --glow: var(--green); }
+.cell .mark.red { --glow: var(--red); }
+
+/* The line's score as a small eval bar on the square's right edge, like the
+   one beside the board. */
+.cell .mini-eval {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 4px;
+  background: var(--red);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.cell .mini-eval span {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--green);
 }
 
 .cell .mark.grow {
@@ -408,8 +440,6 @@ button[hidden] {
              calc(80ms * var(--step, 0) * var(--motion)) backwards;
 }
 
-.cell .mark.green { background: var(--green); }
-.cell .mark.red { background: var(--red); }
 
 .side-switch {
   width: 180px;

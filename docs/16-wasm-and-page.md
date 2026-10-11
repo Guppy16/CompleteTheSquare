@@ -18,6 +18,7 @@ Every export takes and returns plain integers, so the page needs no glue library
 | `reset()` | new game, player 0 to move (the table is kept) |
 | `board(p)` | bitboard of player `p`'s pieces |
 | `board_at(ply, p)` | the same after the first `ply` moves (for the move-list pictures) |
+| `board_after(green, red, mover, square, p)` | player `p`'s board after a hypothetical move, without touching the game (for the pictures in the analysis markers) |
 | `current_player()` | 0 or 1 |
 | `winner()` | winner's index, or -1 while the game runs |
 | `winning_mask()` | corner mask of the completed square, for highlighting |
@@ -79,7 +80,9 @@ Modelled on lichess's engine panel:
   is negated when Red is to move.
 - The eval bar shows Green's share; a forced result fills it.
 - Markers on the board show the candidates, shrinking and fading with their gap to the
-  best move.
+  best move. Each holds a mini board of where its line ends, drawn with `board_after`,
+  a glow in the colour of the side to move, and a small eval bar for the line's score
+  on the square's edge.
 - `evaluate` scores every position of the game with a quick search, one at a time in
   the worker, cached by move prefix, and the move list shows the score after each move.
 
