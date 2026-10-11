@@ -68,6 +68,12 @@ If the worker fails to start or dies, the page's own copy of the module answers 
 outstanding requests and the worker is not used again, so a broken worker degrades to a
 blocking search rather than a frozen game.
 
+Errors fail loudly. A request that throws in the worker is answered with the error
+instead of a result, so the page never waits forever; that error, a worker that dies,
+and any uncaught error or unhandled promise rejection on the page all go to a red banner
+above the board (`showError`) that stays until the page is reloaded. A bug is seen and
+reported rather than leaving the page quietly stuck.
+
 ## The Analysis tab
 
 Modelled on lichess's engine panel:

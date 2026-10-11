@@ -10,8 +10,19 @@ const ready = (async () => {
   ai = instance.exports;
 })();
 
+// Any error is sent back as the request's answer, so the page reports it
+// instead of waiting forever for a reply.
 onmessage = async (event) => {
-  const { id, kind, moves, boardSize, maxDepth, nodeBudget } = event.data;
+  const { id } = event.data;
+  try {
+    await answer(event.data);
+  } catch (err) {
+    console.error(err);                  // the full stack, in the worker's console
+    postMessage({ id, error: err instanceof Error ? err.message : String(err) });
+  }
+};
+
+async function answer({ id, kind, moves, boardSize, maxDepth, nodeBudget }) {
   await ready;
   ai.reset();
   for (const index of moves) ai.play(Math.floor(index / boardSize), index % boardSize);
@@ -45,4 +56,4 @@ onmessage = async (event) => {
   const candidates = [];
   for (let i = 0; i < count; i++) candidates.push({ index: ai.analysis_move(i), score: ai.analysis_score(i) });
   postMessage({ id, index, candidates, ms });
-};
+}

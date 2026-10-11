@@ -49,10 +49,26 @@ const aiFirstBox = document.getElementById('ai-first');
 const modeSelect = document.getElementById('mode-select');
 const tabs = Array.from(modeSelect.querySelectorAll('.tab'));
 const cells = [];                      // index = row * BOARD_SIZE + col, same as the bitboard
+const errorEl = document.getElementById('error');
 let shownBoards = [0, 0];              // the boards as last drawn, to animate what changed
 let winOutline = null;                 // the line drawn around a completed square
 
 document.documentElement.style.setProperty('--board-size', BOARD_SIZE);
+
+// Errors fail loudly: logged, and shown in a banner above the board that stays
+// until the page is reloaded, so a bug is seen and can be reported rather
+// than leaving the page quietly stuck. Uncaught errors and unhandled promise
+// rejections anywhere on the page end up here too.
+function showError(context, err) {
+  console.error(`${context}:`, err);
+  const message = err instanceof Error ? err.message : String(err);
+  errorEl.hidden = false;
+  errorEl.textContent += `${errorEl.textContent ? '\n' : 'Something went wrong; please report this, then reload the page.\n'}` +
+                         `${context}: ${message}`;
+}
+
+window.addEventListener('error', event => showError('Error', event.error || event.message));
+window.addEventListener('unhandledrejection', event => showError('Error', event.reason));
 
 function getColorName(player) {
   return player === 0 ? 'Green' : 'Red';
@@ -270,25 +286,27 @@ function logMoves() {
 // its answer: a square to play ('move'), or every move scored with its
 // expected line ('analyse'). Falls back to the main thread without workers.
 let engineWorker = null;
-const engineRequests = new Map();       // request id -> { resolve, request }
+const engineRequests = new Map();       // request id -> { resolve, reject, request }
 let engineRequestId = 0;
 
 try {
   if (typeof Worker !== 'undefined') engineWorker = new Worker(WORKER_URL);
 } catch (err) {
-  console.error('no engine worker (searching on the main thread instead):', err);
+  showError('The engine worker could not start; searching on the main thread instead', err);
 }
 
 if (engineWorker) {
   engineWorker.onmessage = event => {
     const pending = engineRequests.get(event.data.id);
     engineRequests.delete(event.data.id);
-    if (pending) pending.resolve(event.data);
+    if (!pending) return;
+    if (event.data.error) pending.reject(new Error(`engine worker: ${event.data.error}`));
+    else pending.resolve(event.data);
   };
   // If the worker dies, answer its outstanding requests on the main thread
   // and stop using it, so the game can never be left waiting on it.
   const workerFailed = err => {
-    console.error('engine worker failed; searching on the main thread instead:', err);
+    showError('The engine worker failed; searching on the main thread instead', err.message || err.type);
     engineWorker = null;
     const pending = Array.from(engineRequests.values());
     engineRequests.clear();
@@ -309,8 +327,8 @@ function askEngine(kind, maxDepth, nodeBudget) {
 function askEngineAt(moves, kind, maxDepth, nodeBudget) {
   if (!engineWorker) return Promise.resolve(computeOnMainThread(kind, maxDepth, nodeBudget));
   const id = ++engineRequestId;
-  return new Promise(resolve => {
-    engineRequests.set(id, { resolve, request: [kind, maxDepth, nodeBudget] });
+  return new Promise((resolve, reject) => {
+    engineRequests.set(id, { resolve, reject, request: [kind, maxDepth, nodeBudget] });
     engineWorker.postMessage({ id, kind, moves, boardSize: BOARD_SIZE, maxDepth, nodeBudget });
   });
 }
@@ -603,18 +621,14 @@ function requestAIMove() {
       return;
     }
     if (!ai.play(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE)) {
-      console.error(`AI chose an illegal square ${squareName(index)}`);
-      render();
-      return;
+      throw new Error(`the AI chose an illegal square, ${squareName(index)}`);
     }
     console.log(`AI played ${squareName(index)} in ${ms} ms`);
     logMoves();
     render();
   }).catch(err => {
-    // Fail loudly: show the error where the status goes, not "AI is thinking…" forever.
-    console.error('AI move failed:', err);
-    render();
-    statusEl.textContent = `AI error: ${err.message}. Please report it, then reload the page.`;
+    render();                            // not "AI is thinking…" forever
+    showError('The AI could not move', err);
   });
 }
 
@@ -809,6 +823,6 @@ async function loadAI() {
 buildBoard();
 statusEl.textContent = 'Loading…';
 loadAI().catch(err => {
-  console.error(err);
-  statusEl.textContent = 'Could not load the game module. Try reloading the page.';
+  statusEl.textContent = 'Could not load the game.';
+  showError('The game module did not load', err);
 });

@@ -330,6 +330,25 @@ button[hidden] {
 .mini-board .player-W.last { background: var(--green-bright); }
 .mini-board .player-B.last { background: var(--red-bright); }
 
+/* Errors are shown, not swallowed (see showError). */
+#error {
+  width: min(100%, var(--board-max));
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  background: #3a1513;
+  border: 1px solid var(--red);
+  border-radius: 4px;
+  color: #ffcdd2;
+  font-size: 0.85rem;
+  text-align: left;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+#error[hidden] {
+  display: none;
+}
+
 #status {
   font-size: 18px;
   font-weight: bold;
