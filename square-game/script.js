@@ -188,7 +188,9 @@ function render() {
     // Animation classes stay until the animation ends (see buildBoard), so a
     // quick second render, such as the AI's reply, does not cut one short.
     cell.classList.remove('player-W', 'player-B', 'disabled', 'winner', 'last', 'hint');
-    cell.textContent = '';             // drops any analysis marker
+    // Drops analysis markers and candidate blobs, except blobs mid-exit,
+    // which remove themselves when their animation ends.
+    cell.querySelectorAll('.mark, .mini-eval, .blob:not(.leaving)').forEach(el => el.remove());
     boards.forEach((board, player) => {
       if (board & bit) cell.classList.add(`player-${COLOURS[player]}`, 'disabled');
     });
@@ -583,9 +585,10 @@ function evaluateGame() {
 // --- Playing -----------------------------------------------------------------
 
 // Ask the engine for the AI's move and play it, unless the game moved on meanwhile.
-// Before the AI plays: soft blobs on the moves it weighed, larger and
-// stronger the closer each was to the best, held briefly. The chosen square
-// always gets the strongest (a book move may be missing from the quick analysis).
+// Before the AI plays: soft blobs on the moves it weighed grow while it
+// "decides", larger and stronger the closer each was to the best. The chosen
+// square always gets the strongest (a book move may be missing from the quick
+// analysis). Then leaveCandidates plays them out.
 function showCandidates(index, candidates) {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const motion = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--motion')) || 1;
@@ -593,16 +596,28 @@ function showCandidates(index, candidates) {
   const best = candidates.length ? candidates[0].score : 0;
   const shown = [{ index, score: best }, ...candidates.filter(c => c.index !== index)];
   const colour = ai.current_player() === 0 ? 'green' : 'red';
-  shown.forEach(({ index: square, score }, rank) => {
+  shown.forEach(({ index: square, score }) => {
     const gap = Math.abs(best - score);
     const blob = document.createElement('span');
     blob.classList.add('blob', colour);
     blob.style.setProperty('--size', Math.max(0.45, 1 - gap * 4));
     blob.style.setProperty('--strength', Math.max(0.3, 1 - gap * 3));
-    blob.style.setProperty('--step', rank);
+    blob.style.setProperty('--hold', `${CANDIDATES_MS}ms`);
     cells[square].appendChild(blob);
   });
   return new Promise(resolve => setTimeout(resolve, CANDIDATES_MS * motion));
+}
+
+// The AI has decided: the chosen blob shrinks into the piece landing on its
+// square; the others fade the way a removed piece does. Each blob removes
+// itself when its animation ends.
+function leaveCandidates(index) {
+  cells.forEach((cell, square) => cell.querySelectorAll('.blob').forEach(blob => {
+    blob.classList.add('leaving', square === index ? 'chosen' : 'dismissed');
+    blob.addEventListener('animationend', event => {
+      if (event.animationName !== 'blob-grow') blob.remove();   // the grow may end just after this
+    });
+  }));
 }
 
 function requestAIMove() {
@@ -620,6 +635,7 @@ function requestAIMove() {
       render();                          // stale answer: the game changed while thinking
       return;
     }
+    leaveCandidates(index);
     if (!ai.play(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE)) {
       throw new Error(`the AI chose an illegal square, ${squareName(index)}`);
     }

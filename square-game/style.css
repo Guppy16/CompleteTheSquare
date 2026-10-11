@@ -458,27 +458,45 @@ button[hidden] {
   pointer-events: none;
 }
 
-/* Before the AI plays: a soft blob on each move it weighed (see
+/* Before the AI plays: a see-through square on each move it weighed (see
    showCandidates). --size and --strength shrink with the gap to the best. */
 .cell .blob {
   position: absolute;
   inset: 0;
   margin: auto;
-  width: calc(90% * var(--size, 1));
-  height: calc(90% * var(--size, 1));
-  border-radius: 50%;
-  background: radial-gradient(circle, var(--blob) 0%, transparent 70%);
-  opacity: var(--strength, 1);
+  --blob-max: 60%;                     /* the best candidate's size, as a share of the square */
+  width: calc(var(--blob-max) * var(--size, 1));
+  height: calc(var(--blob-max) * var(--size, 1));
+  background: var(--blob);             /* a see-through square: a preview of the piece */
+  opacity: calc(0.6 * var(--strength, 1));
   pointer-events: none;
-  animation: blob-in calc(0.2s * var(--motion)) ease-out
-             calc(70ms * var(--step, 0) * var(--motion)) backwards;
+  animation: blob-grow calc(var(--hold, 300ms) * var(--motion)) ease-in-out backwards;
+}
+
+/* The AI's choice shrinks into the piece that lands under it; the rest fade
+   like a removed piece (compare the capture animation). */
+.cell .blob.chosen {
+  animation: blob-chosen calc(0.4s * var(--motion)) ease-out forwards;
+}
+
+.cell .blob.dismissed {
+  animation: blob-dismissed calc(0.3s * var(--motion)) ease-in forwards;
 }
 
 .cell .blob.green { --blob: var(--green); }
 .cell .blob.red { --blob: var(--red); }
 
-@keyframes blob-in {
-  from { opacity: 0; transform: scale(0.4); }
+@keyframes blob-grow {
+  from { opacity: 0; transform: scale(0.2); }
+}
+
+@keyframes blob-chosen {
+  to { opacity: 0; transform: scale(0.5); }
+}
+
+@keyframes blob-dismissed {
+  30% { transform: scale(1.12); }
+  to { opacity: 0; transform: scale(0.8); }
 }
 
 .cell .mark.grow {
