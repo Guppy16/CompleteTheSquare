@@ -215,6 +215,34 @@ h1 {
   outline-offset: 3px;
 }
 
+/* The hover frame: one outline that springs between playable squares. The
+   script sets its position and size; .jump drops the movement transitions so
+   it appears in place when it comes back from hidden. */
+.hover-frame {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--frame-size, 0);
+  height: var(--frame-size, 0);
+  transform: translate(var(--frame-x, 0), var(--frame-y, 0));
+  box-shadow: 0 0 0 2px var(--text);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1;
+  transition: transform calc(0.45s * var(--motion)) var(--spring),
+              width calc(0.45s * var(--motion)) var(--spring),
+              height calc(0.45s * var(--motion)) var(--spring),
+              opacity calc(0.15s * var(--motion));
+}
+
+.hover-frame.shown {
+  opacity: 0.7;
+}
+
+.hover-frame.jump {
+  transition: opacity calc(0.15s * var(--motion));
+}
+
 /* Player colours */
 .cell.player-W {
   background-color: var(--green);

@@ -52,6 +52,7 @@ const cells = [];                      // index = row * BOARD_SIZE + col, same a
 const errorEl = document.getElementById('error');
 let shownBoards = [0, 0];              // the boards as last drawn, to animate what changed
 let winOutline = null;                 // the line drawn around a completed square
+let hoverFrame = null;                 // the outline that springs between hovered squares
 
 document.documentElement.style.setProperty('--board-size', BOARD_SIZE);
 
@@ -209,6 +210,7 @@ function render() {
   const count = ai.move_count();
   if (count > 0) cells[ai.move_at(count - 1)].classList.add('last');
   showWin(winMask, newWin);
+  hideFrame();                         // the hovered square may just have been played
 
   if (winner >= 0) {
     statusEl.innerHTML = createColoredStatus(winner, true);
@@ -246,12 +248,34 @@ function animate(cell, name, step = 0) {
 // move there and the pieces that move would capture. Not while the AI moves.
 function showPreview(index) {
   clearPreview();
-  if (!ai || isAITurn() || gameOver()) return;
-  const occupied = ai.board(0) | ai.board(1);
-  if (occupied & (1 << index)) return;
+  const occupied = ai ? ai.board(0) | ai.board(1) : 0;
+  if (!ai || isAITurn() || gameOver() || occupied & (1 << index)) {
+    hideFrame();
+    return;
+  }
+  moveFrame(index);
   cells[index].classList.add(`ghost-${COLOURS[ai.current_player()]}`);
   const captured = ai.captures_if(index);
   cells.forEach((cell, i) => { if (captured & (1 << i)) cell.classList.add('would-capture'); });
+}
+
+// One frame springs from square to square as the mouse moves over playable
+// squares (kinetics' "focus relay"). Coming back from hidden, it appears in
+// place rather than sliding in from wherever it was last.
+function moveFrame(index) {
+  const cell = cells[index];
+  const wasHidden = !hoverFrame.classList.contains('shown');
+  hoverFrame.classList.toggle('jump', wasHidden);
+  hoverFrame.style.setProperty('--frame-x', `${cell.offsetLeft}px`);
+  hoverFrame.style.setProperty('--frame-y', `${cell.offsetTop}px`);
+  hoverFrame.style.setProperty('--frame-size', `${cell.offsetWidth}px`);
+  if (wasHidden) void hoverFrame.offsetWidth;   // apply the jump before the transitions return
+  hoverFrame.classList.remove('jump');
+  hoverFrame.classList.add('shown');
+}
+
+function hideFrame() {
+  hoverFrame.classList.remove('shown');
 }
 
 function clearPreview() {
@@ -820,6 +844,13 @@ function buildBoard() {
     }
     addLabel('');
   }
+  hoverFrame = document.createElement('div');
+  hoverFrame.classList.add('hover-frame');
+  boardEl.appendChild(hoverFrame);
+  boardEl.addEventListener('pointerleave', () => {
+    clearPreview();
+    hideFrame();
+  });
   winOutline = document.createElement('div');
   winOutline.classList.add('win-outline');
   winOutline.hidden = true;
