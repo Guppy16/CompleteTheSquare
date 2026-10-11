@@ -63,6 +63,60 @@ h1 {
   gap: var(--gap);
   width: min(100%, var(--board-max));
   margin: 20px auto;
+  position: relative;                  /* the win outline is placed over the grid */
+}
+
+/* A win: the corners pulse in turn, a frame traces round the square, and
+   the other pieces dim. */
+.cell.win-pulse {
+  animation: win-pulse calc(0.4s * var(--motion)) ease-out
+             calc(90ms * var(--step, 0) * var(--motion));
+}
+
+@keyframes win-pulse {
+  40% { transform: scale(1.18); }
+}
+
+.win-outline {
+  /* Absolutely positioned within its grid area, so it overlaps the squares
+     instead of taking grid cells from them. */
+  position: absolute;
+  inset: -5px;                         /* just outside the corner squares */
+  pointer-events: none;
+  z-index: 1;
+}
+
+.win-outline[hidden] {
+  display: none;
+}
+
+.win-outline svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.win-outline rect {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: square;              /* closes the corner where the line starts and ends */
+  stroke-dasharray: 100;
+}
+
+.win-outline.trace rect {
+  animation: trace calc(0.6s * var(--motion)) ease-in-out
+             calc(360ms * var(--motion)) backwards;
+}
+
+@keyframes trace {
+  from { stroke-dashoffset: 100; }
+}
+
+#board.won .cell:not(.winner) {
+  opacity: 0.4;
+  transition: opacity calc(0.4s * var(--motion)) calc(360ms * var(--motion));
 }
 
 .label {

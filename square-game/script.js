@@ -47,6 +47,7 @@ const aiFirstBox = document.getElementById('ai-first');
 const tabs = Array.from(document.querySelectorAll('#mode-select .tab'));
 const cells = [];                      // index = row * BOARD_SIZE + col, same as the bitboard
 let shownBoards = [0, 0];              // the boards as last drawn, to animate what changed
+let winOutline = null;                 // the line drawn around a completed square
 
 document.documentElement.style.setProperty('--board-size', BOARD_SIZE);
 
@@ -157,6 +158,7 @@ function render() {
   // rippling out from the square just played (when exactly one was).
   const removed = shownBoards.map((shown, player) => shown & ~boards[player]);
   const origin = placed && !(placed & (placed - 1)) ? 31 - Math.clz32(placed) : -1;
+  const newWin = (winMask & placed) !== 0;  // the winning move was just played
   shownBoards = boards;
 
   cells.forEach((cell, i) => {
@@ -171,6 +173,7 @@ function render() {
     if (over) cell.classList.add('disabled');
     if (winMask & bit) cell.classList.add('winner');
     if (placed & bit) animate(cell, 'drop');
+    if (newWin && winMask & bit) animate(cell, 'win-pulse', cornerStep(winMask, i));
     removed.forEach((mask, player) => {
       if (mask & bit) {
         cell.dataset.was = COLOURS[player];
@@ -180,6 +183,7 @@ function render() {
   });
   const count = ai.move_count();
   if (count > 0) cells[ai.move_at(count - 1)].classList.add('last');
+  showWin(winMask, newWin);
 
   if (winner >= 0) {
     statusEl.innerHTML = createColoredStatus(winner, true);
@@ -211,6 +215,36 @@ function animate(cell, name, step = 0) {
   void cell.offsetWidth;               // forces a style flush so re-adding restarts it
   cell.style.setProperty('--step', step);
   cell.classList.add(name);
+}
+
+// The rows and columns a completed square's corners sit on.
+function squareEdges(winMask) {
+  const corners = cells.map((_, j) => j).filter(j => (winMask >> j) & 1);
+  const rows = corners.map(j => Math.floor(j / BOARD_SIZE));
+  const cols = corners.map(j => j % BOARD_SIZE);
+  return { top: Math.min(...rows), bottom: Math.max(...rows),
+           left: Math.min(...cols), right: Math.max(...cols) };
+}
+
+// The winning corners pulse clockwise from the top left: their order, 0 to 3.
+function cornerStep(winMask, i) {
+  const { top, right } = squareEdges(winMask);
+  const onRight = i % BOARD_SIZE === right;
+  if (Math.floor(i / BOARD_SIZE) === top) return onRight ? 1 : 0;
+  return onRight ? 2 : 3;
+}
+
+// Frames the completed square, tracing the frame when the win is new. The
+// frame is absolutely positioned in the grid area of the corner squares, so
+// it follows any resize.
+function showWin(winMask, isNew) {
+  boardEl.classList.toggle('won', winMask !== 0);
+  winOutline.hidden = winMask === 0;
+  if (!winMask) return;
+  const { top, bottom, left, right } = squareEdges(winMask);
+  // +2: grid lines are 1-based and the first row and column hold the labels
+  winOutline.style.gridArea = `${top + 2} / ${left + 2} / ${bottom + 3} / ${right + 3}`;
+  if (isNew) animate(winOutline, 'trace');
 }
 
 // Moves a king would need between two squares: the steps along a capture ray.
@@ -647,12 +681,17 @@ function buildBoard() {
       cell.classList.add('cell');
       cell.title = `${COLUMN_LABELS[c]}${r + 1}`;
       cell.addEventListener('click', () => onCellClick(r, c));
-      cell.addEventListener('animationend', () => cell.classList.remove('drop', 'capture'));
+      cell.addEventListener('animationend', () => cell.classList.remove('drop', 'capture', 'win-pulse'));
       boardEl.appendChild(cell);
       cells.push(cell);
     }
     addLabel('');
   }
+  winOutline = document.createElement('div');
+  winOutline.classList.add('win-outline');
+  winOutline.hidden = true;
+  winOutline.innerHTML = '<svg><rect width="100%" height="100%" pathLength="100"/></svg>';
+  boardEl.appendChild(winOutline);
 }
 
 tabs.forEach(tab => tab.addEventListener('click', () => setMode(tab.dataset.mode)));
