@@ -24,3 +24,6 @@ wasm/target/
 
 # Claude Code worktrees
 .claude/
+
+# local scratch space (browser profiles, screenshots)
+.scratch/
