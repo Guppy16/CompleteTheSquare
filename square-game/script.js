@@ -19,6 +19,7 @@ const ANALYSIS_FIRST_BUDGET = 500000;
 const ANALYSIS_BUDGET = 8000000;       // roughly 3-5 s in the browser
 const ANALYSIS_LINES = 3;              // how many candidate lines to show
 const EVALUATE_BUDGET = 150000;        // per position, for the scores next to each move
+const WIN_DEPTH_BONUS = 0.01;          // as in search.rs: a forced win scores 1 + this per ply to spare
 const WASM_URL = 'square-game/ai.wasm';
 const WORKER_URL = 'square-game/worker.js';
 const COLOURS = ['W', 'B'];            // player 0 is green (W), player 1 is red (B)
@@ -340,10 +341,17 @@ function greenScore(score) {
   return ai.current_player() === 0 ? score : -score;
 }
 
-function scoreText(green) {
-  if (green >= 1) return 'Green wins';
-  if (green <= -1) return 'Red wins';
-  return (green >= 0 ? '+' : '') + green.toFixed(2);
+// A score for Green as text. Forced results read like chess mates: #3 is a
+// square completed on Green's third move from here, #-3 on Red's. A forced
+// win scores 1 + WIN_DEPTH_BONUS for each ply of the search depth left when
+// the square is completed, so with the depth the distance can be read back.
+// Without it (the move list's scores) the count is left off.
+function scoreText(green, depth) {
+  if (Math.abs(green) < 1) return (green >= 0 ? '+' : '') + green.toFixed(2);
+  const sign = green < 0 ? '-' : '';
+  if (depth === undefined) return `#${sign}`;
+  const plies = Math.max(1, depth - Math.round((Math.abs(green) - 1) / WIN_DEPTH_BONUS) + 1);
+  return `#${sign}${Math.ceil(plies / 2)}`;
 }
 
 // A line as lichess writes it: "3. C3 D4 4. B1", or "3... D4 4. B1" when it
@@ -411,7 +419,7 @@ function renderAnalysis(lines, depth, settled, book = -1) {
   // Eval bar: Green's share, forced wins fill it completely.
   const clamped = Math.max(-1, Math.min(1, best));
   evalFill.style.height = `${50 + 50 * clamped}%`;
-  evalText.textContent = scoreText(best);
+  evalText.textContent = scoreText(best, depth);
 
   // The book move, if any, is shown first: it comes from a depth-14 offline
   // search, deeper than the analysis reaches in a few seconds.
@@ -435,7 +443,7 @@ function renderAnalysis(lines, depth, settled, book = -1) {
     mark.style.height = `${Math.round(72 * size)}%`;
     mark.style.fontSize = `${(0.7 * size).toFixed(2)}rem`;
     mark.style.opacity = opacity.toFixed(2);
-    mark.textContent = scoreText(greenScore(score));
+    mark.textContent = scoreText(greenScore(score), depth);
     if (!wasMarked[index]) {
       mark.classList.add('grow');
       mark.style.setProperty('--step', rank);
@@ -469,7 +477,7 @@ function renderAnalysis(lines, depth, settled, book = -1) {
     row.classList.add('line');
     const scoreEl = document.createElement('span');
     scoreEl.classList.add('score');
-    scoreEl.textContent = scoreText(greenScore(score));
+    scoreEl.textContent = scoreText(greenScore(score), depth);
     const movesEl = document.createElement('span');
     movesEl.classList.add('moves');
     movesEl.textContent = lineText(line, ply);

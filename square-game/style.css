@@ -58,8 +58,9 @@ h1 {
 #board {
   display: grid;
   /* row numbers on the left, one column per square, and an equal empty
-     column on the right so the squares themselves sit centred */
-  grid-template-columns: auto repeat(var(--board-size), 1fr) auto;
+     column on the right so the squares themselves sit centred; minmax(0, 1fr)
+     keeps the columns equal whatever a marker's text */
+  grid-template-columns: auto repeat(var(--board-size), minmax(0, 1fr)) auto;
   gap: var(--gap);
   width: min(100%, var(--board-max));
   margin: 20px auto;
@@ -364,6 +365,7 @@ button[hidden] {
 
 #analysis .score {
   flex: 0 0 3.5em;
+  white-space: nowrap;
   font-weight: 700;
   color: var(--text);
 }
@@ -478,6 +480,7 @@ button[hidden] {
   gap: 4px;
   margin: 20px 0;
   flex: 0 0 auto;
+  width: 2.8rem;                       /* fixed, so the board does not resize as the number changes */
 }
 
 #eval-column[hidden] {
