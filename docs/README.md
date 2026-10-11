@@ -5,7 +5,7 @@ WebAssembly and run in the browser. Each page below covers one idea, shows the c
 implements it, and works through an example on a real board. Read them in order the first
 time; afterwards each one stands alone.
 
-<p align="center"><img src="img/game.svg" alt="an animated game" width="340"></p>
+<p align="center"><img src="img/game.svg" alt="an animated game" width="280"></p>
 
 > [!NOTE]
 > **Glossary**

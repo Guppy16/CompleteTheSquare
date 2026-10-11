@@ -12,11 +12,11 @@ and hover frame) is modelled on [Kinetics](https://github.com/ckissi/kinetics), 
 of spring-physics interface animations.
 
 <p align="center">
-  <img src="docs/img/game.svg" alt="An animated game: before each move the engine's candidate squares grow in, the chosen one becomes the piece as it lands, captured pieces swell and fade, the eval bar springs to the new score, and green completes a square" width="380">
+  <img src="docs/img/game.svg" alt="An animated game: before each move the engine's candidate squares grow in, the chosen one becomes the piece as it lands, captured pieces swell and fade, and Green completes a square" width="300">
 </p>
 
 <p align="center"><sub>A real game, animated from the engine with the page's own motion. The see-through squares are the engine's top candidates
-before each move, as when you play the AI; the bar is its evaluation for green.</sub></p>
+before each move, as when you play the AI.</sub></p>
 
 ## The engine
 
@@ -49,7 +49,7 @@ Tools (all `cargo run --release --example ...` from `wasm/`):
 | tool | what it does |
 |------|--------------|
 | `analyse -- "1. C3 A1  2. B2 D4" 10 16` | replay a game: what the engine would have played, every move scored, the expected line; depth 10, 16 threads |
-| `arena -- 10 200` | the AI as red against a human-like opponent (10% blunders, 200 games): the strength number |
+| `arena -- 10 200` | the AI as Red against a human-like opponent (10% blunders, 200 games): the strength number |
 | `validate_reply -- C3 A1 C5 40` | check opening-book candidates by play |
 | `bench -- 11 1 4 16` | timing of the parallel search |
 | `diagram -- --moves "1. A1 C3" --mark B2` | a board as SVG, for the docs |
@@ -59,16 +59,16 @@ Tools (all `cargo run --release --example ...` from `wasm/`):
 ## Findings
 
 - The AI beats a depth-5 opponent that blunders 10% of the time in 96 to 98 games of 100.
-- **A1 (a corner) is a first-player win** at depth 16: every red reply loses. The other
+- **A1 (a corner) is a first-player win** at depth 16: every Red reply loses. The other
   five distinct first moves are not: B1 and C3 are draws by repetition with best play, C1
-  and B2 leave green slightly better, C2 is level. Details on the
+  and B2 leave Green slightly better, C2 is level. Details on the
   [opening book page](docs/14-opening-book.md).
 - From any short opening at equal engine strength, the side to move wins over 90% of games:
   this game is decided by tempo from the first moves.
 
 ## To do
 
-- Book entries one ply deeper: red's best answer to each of green's second moves.
+- Book entries one ply deeper: Red's best answer to each of Green's second moves.
 - Tests for the exports the tests don't yet cover (`analyse`, `evaluate`, `ai_suggest`,
   `board_at`, `repetitions`, the node-budget abort).
 - Late move reductions, only if more strength is ever wanted.

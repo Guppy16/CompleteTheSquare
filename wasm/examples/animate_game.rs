@@ -1,10 +1,9 @@
 //! An animated SVG of a game, for the README, with the page's motion: before
 //! each move the engine's top candidates grow in as see-through squares, the
 //! chosen one shrinks into the piece as it lands with a spring, the others
-//! fade, captured pieces swell and fade rippling out from the move, an eval
-//! bar (green's share) springs to the engine's score, and a win pulses its
-//! corners, traces a frame round the square and dims the rest. Loops. GitHub
-//! plays SVG (SMIL) animations inline in Markdown.
+//! fade, captured pieces swell and fade rippling out from the move, and a win
+//! pulses its corners, traces a frame round the square and dims the rest.
+//! Loops. GitHub plays SVG (SMIL) animations inline in Markdown.
 //!
 //! The timings are the page's (style.css, script.js) times its --motion, and
 //! the spring is the same sampled curve. SMIL has no linear() easing, so the
@@ -33,7 +32,6 @@ const CHOSEN: f64 = 0.4 * MOTION; // the chosen candidate shrinking into the pie
 const FADE: f64 = 0.3 * MOTION; // a captured piece or dismissed candidate fading
 const RIPPLE_START: f64 = 0.06 * MOTION; // the first capture after the move
 const RIPPLE_STEP: f64 = 0.07 * MOTION; // each step further from the move
-const BAR: f64 = 0.6 * MOTION; // the eval bar's spring
 const PULSE: f64 = 0.4 * MOTION; // a winning corner's pulse
 const PULSE_STEP: f64 = 0.09 * MOTION; // between corners, clockwise from the top left
 const TRACE_DELAY: f64 = 0.36 * MOTION; // the frame starts after the corners
@@ -177,10 +175,9 @@ fn main() {
     let tt = TranspositionTable::new();
 
     // Play the game, recording each position, the engine's top candidates and
-    // their scores before each move, its score after, and the win.
+    // their scores before each move, and the win.
     let mut states = vec![State::new()];
     let mut candidates: Vec<Vec<(usize, f64)>> = Vec::new();
-    let mut green_eval = vec![0.0f64];
     let mut history = vec![State::new().key()];
     let mut win_mask = 0u32;
     for &m in &moves {
@@ -192,12 +189,8 @@ fn main() {
         states.push(next);
         if let Some(mask) = won {
             win_mask = mask;
-            green_eval.push(if next.current == 0 { 1.0 } else { -1.0 });
             break;
         }
-        let (after, _) = analyse_position(&next, 8, 600_000, &history, &tt);
-        let score = after.first().map_or(0.0, |c| c.score);
-        green_eval.push(if next.current == 0 { score } else { -score });
     }
     let n = states.len() - 1;
     let land = |i: usize| i as f64 * PLY + DECIDE; // when move i's piece lands
@@ -254,7 +247,7 @@ fn main() {
     }
 
     let board = 5.0 * CELL;
-    let width = PAD + board + 70.0;
+    let width = PAD + board + PAD;
     let height = PAD + board + 56.0;
     let mut out = format!(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width:.0}\" height=\"{height:.0}\" viewBox=\"0 0 {width:.0} {height:.0}\" font-family=\"system-ui, sans-serif\">\n<rect width=\"100%\" height=\"100%\" rx=\"10\" fill=\"#121212\"/>\n"
@@ -356,32 +349,12 @@ fn main() {
         ));
     }
 
-    // Eval bar to the right: green's share from the bottom, springing to each
-    // new score. Square-cornered, as on the page.
-    let bx = PAD + board + 22.0;
-    let (by, bh) = (PAD + 2.0, board - 4.0);
-    out.push_str(&format!("<rect x=\"{bx:.0}\" y=\"{by:.0}\" width=\"14\" height=\"{bh:.0}\" fill=\"{RED}\"/>\n"));
-    let mut share = Track::new(bh / 2.0);
-    for (i, e) in green_eval.iter().enumerate().skip(1) {
-        let to = (0.5 + 0.5 * e.clamp(-1.0, 1.0)) * bh;
-        share.spring(land(i - 1) + 0.1, BAR, share.last(), to);
-    }
-    share.ease_out(reset, RESET, bh / 2.0);
-    let clamped = |v: f64| v.clamp(0.0, bh);
-    out.push_str(&format!(
-        "<rect x=\"{bx:.0}\" y=\"{:.1}\" width=\"14\" height=\"{:.1}\" fill=\"{GREEN}\">{}{}</rect>\n",
-        by + bh / 2.0,
-        bh / 2.0,
-        smil("height", &share.frames(|v| format!("{:.1}", clamped(v))), total),
-        smil("y", &share.frames(|v| format!("{:.1}", by + bh - clamped(v))), total)
-    ));
-
     // Caption: the move just played, one text per ply.
     let cap_y = PAD + board + 30.0;
     for i in 0..n {
         let ply = i + 1;
         let num = if i % 2 == 0 { format!("{}.", i / 2 + 1) } else { format!("{}...", i / 2 + 1) };
-        let side = if i % 2 == 0 { "green" } else { "red" };
+        let side = if i % 2 == 0 { "Green" } else { "Red" };
         let captured = states[i].occupied() & !states[ply].occupied() & !(1u32 << moves[i]);
         let lost: Vec<String> = (0..25).filter(|c| captured & (1 << c) != 0).map(name).collect();
         let mut caption = format!("{num} {side} {}", name(moves[i]));
