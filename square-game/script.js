@@ -151,7 +151,12 @@ function render() {
   const winMask = ai.winning_mask();
   const over = gameOver();
 
-  const placed = (boards[0] | boards[1]) & ~(shownBoards[0] | shownBoards[1]);
+  const before = shownBoards[0] | shownBoards[1];
+  const placed = (boards[0] | boards[1]) & ~before;
+  // Captured pieces are removed. Each one fades out in its old colour,
+  // rippling out from the square just played (when exactly one was).
+  const removed = shownBoards.map((shown, player) => shown & ~boards[player]);
+  const origin = placed && !(placed & (placed - 1)) ? 31 - Math.clz32(placed) : -1;
   shownBoards = boards;
 
   cells.forEach((cell, i) => {
@@ -166,6 +171,12 @@ function render() {
     if (over) cell.classList.add('disabled');
     if (winMask & bit) cell.classList.add('winner');
     if (placed & bit) animate(cell, 'drop');
+    removed.forEach((mask, player) => {
+      if (mask & bit) {
+        cell.dataset.was = COLOURS[player];
+        animate(cell, 'capture', origin < 0 ? 0 : 60 + 70 * (distance(origin, i) - 1));
+      }
+    });
   });
   const count = ai.move_count();
   if (count > 0) cells[ai.move_at(count - 1)].classList.add('last');
@@ -195,10 +206,18 @@ function render() {
 }
 
 // Restarts the animation if the cell is already running one.
-function animate(cell, name) {
+function animate(cell, name, delay = 0) {
   cell.classList.remove(name);
   void cell.offsetWidth;               // forces a style flush so re-adding restarts it
+  cell.style.setProperty('--delay', `${delay}ms`);
   cell.classList.add(name);
+}
+
+// Moves a king would need between two squares: the steps along a capture ray.
+function distance(a, b) {
+  const rows = Math.abs(Math.floor(a / BOARD_SIZE) - Math.floor(b / BOARD_SIZE));
+  const cols = Math.abs(a % BOARD_SIZE - b % BOARD_SIZE);
+  return Math.max(rows, cols);
 }
 
 function logMoves() {
@@ -625,7 +644,7 @@ function buildBoard() {
       cell.classList.add('cell');
       cell.title = `${COLUMN_LABELS[c]}${r + 1}`;
       cell.addEventListener('click', () => onCellClick(r, c));
-      cell.addEventListener('animationend', () => cell.classList.remove('drop'));
+      cell.addEventListener('animationend', () => cell.classList.remove('drop', 'capture'));
       boardEl.appendChild(cell);
       cells.push(cell);
     }

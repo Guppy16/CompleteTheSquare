@@ -106,6 +106,20 @@ h1 {
   from { transform: scale(0.5); }
 }
 
+/* A captured piece swells in its old colour, then fades to an empty square.
+   --delay (set from JavaScript) ripples the captures out from the move. */
+.cell.capture[data-was="W"] { --from: var(--green); }
+.cell.capture[data-was="B"] { --from: var(--red); }
+
+.cell.capture {
+  animation: capture 0.3s ease-in var(--delay, 0ms) backwards;
+}
+
+@keyframes capture {
+  0%   { background-color: var(--from); border-color: var(--from); }
+  30%  { background-color: var(--from); border-color: var(--from); transform: scale(1.12); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation: none !important;
