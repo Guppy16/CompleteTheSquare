@@ -384,6 +384,20 @@ button[hidden] {
 .mini-board .player-W.last { background: var(--green-bright); }
 .mini-board .player-B.last { background: var(--red-bright); }
 
+footer {
+  margin-top: 20px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+footer a {
+  color: var(--muted);
+}
+
+footer a:hover {
+  color: var(--text);
+}
+
 /* Errors are shown, not swallowed (see showError). */
 #error {
   width: min(100%, var(--board-max));

@@ -7,6 +7,9 @@ Two players take turns placing a piece on an empty square. Place a piece so that
 the opponent's pieces sits between it and one of yours, in any of the eight directions,
 and the run is captured. Own all four corners of any square (2x2 up to 5x5) and you win.
 Adapted from [VatsalRaina/CompleteTheSquare](https://github.com/VatsalRaina/CompleteTheSquare).
+The page's motion (pieces landing on a spring, rippling captures, the sliding tab pill
+and hover frame) is modelled on [Kinetics](https://github.com/ckissi/kinetics), a gallery
+of spring-physics interface animations.
 
 <p align="center">
   <img src="docs/img/game.svg" alt="An animated game: before each move the engine's candidate squares grow in, the chosen one becomes the piece as it lands, captured pieces swell and fade, the eval bar springs to the new score, and green completes a square" width="380">
