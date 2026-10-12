@@ -1,8 +1,8 @@
 # 10. Symmetry
 
-**Code:** [`wasm/src/game.rs`](../wasm/src/game.rs): `symmetry`, `transform`, `canonical_key`, the
+**Code:** [`wasm/src/game.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/game.rs): `symmetry`, `transform`, `canonical_key`, the
 `sym_square` / `sym_rows` / `sym_inverse` tables built in `build_tables`; the
-`symmetric_positions_share_a_key` test in [`wasm/tests/ai.rs`](../wasm/tests/ai.rs).
+`symmetric_positions_share_a_key` test in [`wasm/tests/ai.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/tests/ai.rs).
 
 ## The idea
 

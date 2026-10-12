@@ -1,6 +1,6 @@
 # 7. Move ordering
 
-**Code:** [`wasm/src/search.rs`](../wasm/src/search.rs): `ordered_moves`, `Evaluator::new` (the `move_order`
+**Code:** [`wasm/src/search.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/search.rs): `ordered_moves`, `Evaluator::new` (the `move_order`
 part), the `killers` field of `Search`, the table probe at the top of `negamax`.
 
 ## Why it matters

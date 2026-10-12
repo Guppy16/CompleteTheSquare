@@ -1,6 +1,6 @@
 # 5. Minimax, written as negamax
 
-**Code:** [`wasm/src/search.rs`](../wasm/src/search.rs): `negamax` (the loop), `search_root`.
+**Code:** [`wasm/src/search.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/search.rs): `negamax` (the loop), `search_root`.
 
 ## Minimax
 

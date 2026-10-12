@@ -1,6 +1,6 @@
 # 1. Bitboards
 
-**Code:** [`wasm/src/game.rs`](../wasm/src/game.rs): `State`, `square_bit`, `bit_index`, `FULL_MASK`.
+**Code:** [`wasm/src/game.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/game.rs): `State`, `square_bit`, `bit_index`, `FULL_MASK`.
 
 ## The idea
 

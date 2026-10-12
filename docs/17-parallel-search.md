@@ -1,8 +1,8 @@
 # 17. Parallel search (native tools only)
 
-**Code:** [`wasm/src/parallel.rs`](../wasm/src/parallel.rs): `SharedTable`, `best_move_parallel`,
-`root_scores_parallel`, `principal_variation_parallel`; [`wasm/src/search.rs`](../wasm/src/search.rs): the `Table`
-trait, `Search::with_evaluator`, `Search::with_stop`; [`wasm/tests/parallel.rs`](../wasm/tests/parallel.rs).
+**Code:** [`wasm/src/parallel.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/parallel.rs): `SharedTable`, `best_move_parallel`,
+`root_scores_parallel`, `principal_variation_parallel`; [`wasm/src/search.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/search.rs): the `Table`
+trait, `Search::with_evaluator`, `Search::with_stop`; [`wasm/tests/parallel.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/tests/parallel.rs).
 
 ## Scope
 

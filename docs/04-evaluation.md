@@ -1,6 +1,6 @@
 # 4. Evaluation
 
-**Code:** [`wasm/src/search.rs`](../wasm/src/search.rs): `Evaluator` (`new`, `evaluate`, `threat_difference`),
+**Code:** [`wasm/src/search.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/search.rs): `Evaluator` (`new`, `evaluate`, `threat_difference`),
 the `W_*` and `WIN_*` constants.
 
 ## The idea

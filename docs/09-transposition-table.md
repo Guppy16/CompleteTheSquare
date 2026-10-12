@@ -1,7 +1,7 @@
 # 9. The transposition table
 
-**Code:** [`wasm/src/search.rs`](../wasm/src/search.rs): `TranspositionTable`, `TtEntry`, `Bound`, the probe and
-store in `negamax`, `TT_BITS`; [`wasm/src/lib.rs`](../wasm/src/lib.rs): the `tt` field of `Session`.
+**Code:** [`wasm/src/search.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/search.rs): `TranspositionTable`, `TtEntry`, `Bound`, the probe and
+store in `negamax`, `TT_BITS`; [`wasm/src/lib.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/lib.rs): the `tt` field of `Session`.
 
 ## The idea
 

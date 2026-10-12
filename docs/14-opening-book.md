@@ -1,8 +1,8 @@
 # 14. The opening book
 
-**Code:** [`wasm/src/search.rs`](../wasm/src/search.rs): `OPENING_BOOK`, `book_move`, the check at the top of
-`best_move_scored`; [`wasm/src/lib.rs`](../wasm/src/lib.rs): `book_square`; the
-`opening_book_replies_through_symmetry` test in [`wasm/tests/ai.rs`](../wasm/tests/ai.rs).
+**Code:** [`wasm/src/search.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/search.rs): `OPENING_BOOK`, `book_move`, the check at the top of
+`best_move_scored`; [`wasm/src/lib.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/lib.rs): `book_square`; the
+`opening_book_replies_through_symmetry` test in [`wasm/tests/ai.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/tests/ai.rs).
 
 ## Why a book
 

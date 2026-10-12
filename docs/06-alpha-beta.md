@@ -1,7 +1,7 @@
 # 6. Alpha-beta pruning
 
-**Code:** [`wasm/src/search.rs`](../wasm/src/search.rs): `negamax` (the `alpha`/`beta` handling), the
-`alpha_beta_matches_plain_minimax` test in [`wasm/tests/ai.rs`](../wasm/tests/ai.rs).
+**Code:** [`wasm/src/search.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/search.rs): `negamax` (the `alpha`/`beta` handling), the
+`alpha_beta_matches_plain_minimax` test in [`wasm/tests/ai.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/tests/ai.rs).
 
 ## The idea
 
@@ -71,7 +71,7 @@ Three of the twelve leaves were never generated, and the answer is exactly what 
 search gives: green plays D4. Near the root of a real search each skipped "leaf" is a
 whole subtree, which is where the savings come from.
 
-The tree is drawn by [`wasm/examples/tree_diagram.rs`](../wasm/examples/tree_diagram.rs),
+The tree is drawn by [`wasm/examples/tree_diagram.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/examples/tree_diagram.rs),
 which also prints the table above.
 
 ## Fail-soft and bounds

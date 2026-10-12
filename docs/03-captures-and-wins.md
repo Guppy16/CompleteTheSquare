@@ -1,6 +1,6 @@
 # 3. Captures and wins
 
-**Code:** [`wasm/src/game.rs`](../wasm/src/game.rs): `build_tables` (the `capture_rays` and `corner_masks`
+**Code:** [`wasm/src/game.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/game.rs): `build_tables` (the `capture_rays` and `corner_masks`
 parts), `remove_pieces`, `winning_mask`, `play_move`.
 
 ## The rules

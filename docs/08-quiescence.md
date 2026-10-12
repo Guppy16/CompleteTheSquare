@@ -1,8 +1,8 @@
 # 8. Quiescence search
 
-**Code:** [`wasm/src/search.rs`](../wasm/src/search.rs): `quiescence`, `capture_moves`,
+**Code:** [`wasm/src/search.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/search.rs): `quiescence`, `capture_moves`,
 `Evaluator::has_threat`, `QUIESCENCE_DEPTH`.
-**Experiment:** [`wasm/examples/experiment_quiescence.rs`](../wasm/examples/experiment_quiescence.rs).
+**Experiment:** [`wasm/examples/experiment_quiescence.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/examples/experiment_quiescence.rs).
 
 ## The problem: the horizon effect
 

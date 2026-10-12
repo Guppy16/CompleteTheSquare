@@ -1,6 +1,6 @@
 # How the AI works
 
-The rules engine and the AI are a Rust crate in [`wasm/`](../wasm/), compiled to
+The rules engine and the AI are a Rust crate in [`wasm/`](https://github.com/Guppy16/CompleteTheSquare/tree/master/wasm/), compiled to
 WebAssembly and run in the browser. Each page below covers one idea, shows the code that
 implements it, and works through an example on a real board. Read them in order the first
 time; afterwards each one stands alone.
@@ -46,13 +46,13 @@ time; afterwards each one stands alone.
 
 | file | holds |
 |------|-------|
-| [`wasm/src/game.rs`](../wasm/src/game.rs) | `State`, the precomputed `Tables`, `play_move`, captures, win detection, symmetry |
-| [`wasm/src/search.rs`](../wasm/src/search.rs) | `Evaluator`, `negamax`, `quiescence`, the transposition table, iterative deepening, book, analysis |
-| [`wasm/src/parallel.rs`](../wasm/src/parallel.rs) | native only: the shared table, lazy SMP, root splitting |
-| [`wasm/src/lib.rs`](../wasm/src/lib.rs) | the `Session` (move list, undo/redo) and every `extern "C"` export |
-| [`wasm/tests/`](../wasm/tests/) | regression tests; parallel-versus-serial agreement |
-| [`wasm/examples/`](../wasm/examples/) | arena, analyse, experiments, the diagram generator |
-| [`square-game/script.js`](../square-game/script.js), [`worker.js`](../square-game/worker.js) | the page, and the worker that runs the search |
+| [`wasm/src/game.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/game.rs) | `State`, the precomputed `Tables`, `play_move`, captures, win detection, symmetry |
+| [`wasm/src/search.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/search.rs) | `Evaluator`, `negamax`, `quiescence`, the transposition table, iterative deepening, book, analysis |
+| [`wasm/src/parallel.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/parallel.rs) | native only: the shared table, lazy SMP, root splitting |
+| [`wasm/src/lib.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/lib.rs) | the `Session` (move list, undo/redo) and every `extern "C"` export |
+| [`wasm/tests/`](https://github.com/Guppy16/CompleteTheSquare/tree/master/wasm/tests/) | regression tests; parallel-versus-serial agreement |
+| [`wasm/examples/`](https://github.com/Guppy16/CompleteTheSquare/tree/master/wasm/examples/) | arena, analyse, experiments, the diagram generator |
+| [`square-game/script.js`](https://github.com/Guppy16/CompleteTheSquare/blob/master/square-game/script.js), [`worker.js`](https://github.com/Guppy16/CompleteTheSquare/blob/master/square-game/worker.js) | the page, and the worker that runs the search |
 
 The pages name functions rather than line numbers, which move. To jump to one:
 
@@ -61,9 +61,9 @@ grep -n "fn negamax" wasm/src/search.rs
 ```
 
 The pictures are SVG files in [`img/`](img/), drawn from real positions by the engine:
-boards with [`diagram.rs`](../wasm/examples/diagram.rs), search trees with
-[`tree_diagram.rs`](../wasm/examples/tree_diagram.rs), the animated game with
-[`animate_game.rs`](../wasm/examples/animate_game.rs).
+boards with [`diagram.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/examples/diagram.rs), search trees with
+[`tree_diagram.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/examples/tree_diagram.rs), the animated game with
+[`animate_game.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/examples/animate_game.rs).
 
 ## Further reading
 

@@ -1,6 +1,6 @@
 # 2. Move generation
 
-**Code:** [`wasm/src/game.rs`](../wasm/src/game.rs): `State::empty`; [`wasm/src/search.rs`](../wasm/src/search.rs): `ordered_moves`,
+**Code:** [`wasm/src/game.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/game.rs): `State::empty`; [`wasm/src/search.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/search.rs): `ordered_moves`,
 `capture_moves`.
 
 ## The idea

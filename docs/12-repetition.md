@@ -1,7 +1,7 @@
 # 12. Repetition
 
-**Code:** [`wasm/src/search.rs`](../wasm/src/search.rs): the `path` field of `Search`, `Search::draw_score`,
-`DRAW_CONTEMPT`, the check at the top of `negamax`; [`wasm/src/lib.rs`](../wasm/src/lib.rs): `Session::keys`,
+**Code:** [`wasm/src/search.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/search.rs): the `path` field of `Search`, `Search::draw_score`,
+`DRAW_CONTEMPT`, the check at the top of `negamax`; [`wasm/src/lib.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/lib.rs): `Session::keys`,
 `Session::repetitions`, `Session::draw`, `REPETITION_LIMIT`.
 
 ## The problem
@@ -70,7 +70,7 @@ The loop above, with the AI as red, from the position after green's block:
 - If red were actually losing everywhere else (all below -0.2), it would take the
   repetition, which is the right call: a draw beats a loss.
 
-A test in [`wasm/tests/ai.rs`](../wasm/tests/ai.rs) replays this exact position and checks both that the AI
+A test in [`wasm/tests/ai.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/tests/ai.rs) replays this exact position and checks both that the AI
 declines the repetition and that the game declares the threefold draw.
 
 ## Repetition scores stay on their line

@@ -1,6 +1,6 @@
 # 13. Lost positions
 
-**Code:** [`wasm/src/search.rs`](../wasm/src/search.rs): `best_losing_move`, the hand-off at the end of
+**Code:** [`wasm/src/search.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/search.rs): `best_losing_move`, the hand-off at the end of
 `search_root`, `Evaluator::winning_squares`, `Evaluator::count_threats`.
 
 ## The problem

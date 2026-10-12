@@ -1,7 +1,7 @@
 # 16. WebAssembly and the page
 
-**Code:** [`wasm/src/lib.rs`](../wasm/src/lib.rs) (the `Session` and every export), [`wasm/build.sh`](../wasm/build.sh),
-[`square-game/script.js`](../square-game/script.js), [`square-game/worker.js`](../square-game/worker.js).
+**Code:** [`wasm/src/lib.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/src/lib.rs) (the `Session` and every export), [`wasm/build.sh`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/build.sh),
+[`square-game/script.js`](https://github.com/Guppy16/CompleteTheSquare/blob/master/square-game/script.js), [`square-game/worker.js`](https://github.com/Guppy16/CompleteTheSquare/blob/master/square-game/worker.js).
 
 ## The module owns the game
 
@@ -34,8 +34,8 @@ Every export takes and returns plain integers, so the page needs no glue library
 | `evaluate(max_depth, node_budget)` | the best move's score for the side to move |
 | `book_square()` | the opening book's move for the position, or -1 |
 
-[`wasm/build.sh`](../wasm/build.sh) compiles with `cargo build --release --target wasm32-unknown-unknown`
-and copies the 66 KB result to [`square-game/ai.wasm`](../square-game/ai.wasm), which is committed so GitHub
+[`wasm/build.sh`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/build.sh) compiles with `cargo build --release --target wasm32-unknown-unknown`
+and copies the 66 KB result to [`square-game/ai.wasm`](https://github.com/Guppy16/CompleteTheSquare/blob/master/square-game/ai.wasm), which is committed so GitHub
 Pages serves the site with no build step. The release profile uses `opt-level = 3`,
 LTO, `panic = "abort"` and `strip`.
 

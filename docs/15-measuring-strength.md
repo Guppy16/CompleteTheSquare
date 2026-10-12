@@ -1,6 +1,6 @@
 # 15. Measuring strength
 
-**Code:** [`wasm/examples/arena/main.rs`](../wasm/examples/arena/main.rs), [`wasm/examples/analyse.rs`](../wasm/examples/analyse.rs);
+**Code:** [`wasm/examples/arena/main.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/examples/arena/main.rs), [`wasm/examples/analyse.rs`](https://github.com/Guppy16/CompleteTheSquare/blob/master/wasm/examples/analyse.rs);
 `search::root_scores`, `search::principal_variation`.
 
 ## Only measure
