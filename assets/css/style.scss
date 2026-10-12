@@ -1,0 +1,49 @@
+---
+---
+
+// The docs pages that GitHub Pages builds with Jekyll: its default theme,
+// recoloured to the game's dark palette (square-game/style.css).
+@import "{{ site.theme }}";
+
+$bg: #121212;
+$surface: #1e1e1e;
+$surface-2: #2a2a2a;
+$border: #3a3a3a;
+$text: #e6e6e6;
+$muted: #8a8a8a;
+$link: #64b5f6;
+
+:root { color-scheme: dark; }
+
+body { color: $text; background-color: $bg; }
+a { color: $link; }
+
+.markdown-body {
+  h1, h2 { border-bottom-color: $border; }
+  h6, blockquote { color: $muted; }
+  blockquote { border-left-color: $border; }
+  hr { background-color: $border; }
+  img { background-color: transparent; }   // the diagrams bring their own background
+  code, tt { background-color: $surface-2; }
+  pre, .highlight pre { background-color: $surface; }
+  kbd { color: $text; background-color: $surface-2; border-color: $border; box-shadow: none; }
+  table th, table td { border-color: $border; }
+  table tr { background-color: $bg; border-top-color: $border; }
+  table tr:nth-child(2n) { background-color: $surface; }
+}
+
+// Code: the theme colours tokens for a light background, so every class is reset here.
+.highlight {
+  color: $text;
+  .c, .cd, .cm, .c1, .cs, .cp { color: #8b949e; }                        // comments
+  .k, .kv, .kc, .kd, .kn, .kp, .kr, .ow { color: #ff7b72; }              // keywords
+  .kt, .nc, .nn, .ne, .bp { color: #ffa657; }                            // types
+  .m, .mb, .mx, .mf, .mh, .mi, .il, .mo, .no, .ss { color: #79c0ff; }    // numbers, constants
+  .s, .sb, .sc, .sd, .s2, .se, .sh, .si, .sx, .s1, .sr { color: #a5d6ff; } // strings
+  .nf, .nd, .na, .nt { color: #d2a8ff; }                                 // functions, attributes
+  .nb, .ni, .nl, .nv, .vc, .vg, .vi, .o, .w { color: $text; }
+  .ge, .gd, .gi, .gh, .gu, .go, .gp, .gr, .gt { color: $muted; background-color: transparent; }
+  .gd { color: #ffa198; }
+  .gi { color: #7ee787; }
+  .err { color: #ffa198; background-color: transparent; }
+}
