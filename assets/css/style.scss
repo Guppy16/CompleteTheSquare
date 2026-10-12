@@ -47,3 +47,45 @@ a { color: $link; }
   .gi { color: #7ee787; }
   .err { color: #ffa198; background-color: transparent; }
 }
+
+// The footer each page ends with, "← prev · index · next →", as three cards. The
+// markdown stays plain so it still reads well on GitHub.
+.markdown-body {
+  hr:has(+ p:last-child > sub:only-child) { display: none; }
+
+  > p:last-child > sub:only-child {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    grid-template-areas: "prev index next";
+    gap: 12px;
+    margin-top: 48px;
+    font-size: 0;            // hides the "←", "·" and "→" between the links
+
+    a {
+      padding: 12px 16px;
+      border: 1px solid $border;
+      border-radius: 6px;
+      background-color: $surface;
+      font-size: 14px;
+      line-height: 1.4;
+      transition: border-color 0.15s, transform 0.15s;
+    }
+    a:hover {
+      border-color: $link;
+      text-decoration: none;
+      transform: translateY(-2px);
+    }
+    a::before {
+      display: block;
+      margin-bottom: 2px;
+      font-size: 12px;
+      color: $muted;
+    }
+    a[href$="/docs/"] { grid-area: index; text-align: center; }
+    a[href$="/docs/"]::before { content: "Contents"; }
+    a:has(+ a[href$="/docs/"]) { grid-area: prev; }
+    a:has(+ a[href$="/docs/"])::before { content: "Previous"; }
+    a[href$="/docs/"] ~ a { grid-area: next; text-align: right; }
+    a[href$="/docs/"] ~ a::before { content: "Next"; }
+  }
+}
