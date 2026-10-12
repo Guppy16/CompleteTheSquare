@@ -8,3 +8,11 @@ CREATE TABLE IF NOT EXISTS games (
   played_at TEXT NOT NULL,                               -- when the game ended, from the page
   received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Bug reports sent through the connector's report_bug tool, by Claude for a user.
+CREATE TABLE IF NOT EXISTS reports (
+  id INTEGER PRIMARY KEY,
+  game TEXT,                                             -- the game id, if the report is about a game
+  description TEXT NOT NULL,
+  received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

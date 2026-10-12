@@ -64,8 +64,11 @@ export function position(squares) {
   const winner = engine.winner();
   const draw = engine.draw() === 1;
   const moves = squares.map(squareName);
+  // The position after each move, as [green, red] bitboards, for the move list's mini boards.
+  const boards = squares.map((_, i) => [engine.board_at(i + 1, 0), engine.board_at(i + 1, 1)]);
   return {
     moves,
+    boards,
     green: squaresOf(green),
     red: squaresOf(red),
     last: ply ? moves[ply - 1] : null,

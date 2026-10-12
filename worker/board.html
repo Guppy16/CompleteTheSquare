@@ -15,6 +15,8 @@
     --muted: #8a8a8a;
     --green: #4CAF50;
     --red: #F44336;
+    --green-bright: #8ce68f;   /* the last move in the mini boards */
+    --red-bright: #ff8a80;
     --accent: #ff9900;
     --gap: 4px;
     --motion: 0.75;
@@ -26,7 +28,18 @@
   }
   html, body { margin: 0; background: transparent; overflow: hidden; }   /* no scrollbar to change the width */
   body { font: 14px/1.4 system-ui, sans-serif; color: var(--text); }
-  main { max-width: 360px; margin: 0 auto; padding: 12px 12px 14px; background: var(--bg); border-radius: 14px; }
+  main { max-width: 500px; margin: 0 auto; padding: 12px 12px 14px; background: var(--bg); border-radius: 14px; }
+
+  /* The board on the left, the moves beside it, as tall as the board and scrolling
+     (contain: size keeps the list from making the row taller); below it when narrow. */
+  .game { display: flex; gap: 14px; }
+  .play { flex: 1 1 auto; min-width: 0; max-width: 340px; }
+  #move-list { flex: 0 0 auto; width: 120px; contain: size; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  @media (max-width: 440px) {
+    .game { flex-direction: column; }
+    .play { max-width: none; }
+    #move-list { width: auto; contain: none; max-height: 150px; }
+  }
 
   #board {
     display: grid;
@@ -79,6 +92,23 @@
   .cell.ghost-B::after { background: var(--red); }
   .cell.would-capture { transform: scale(0.8); outline: 2px dashed var(--accent); outline-offset: 3px; }
 
+  /* The hover frame: one outline that springs between playable squares. The
+     script sets its position and size; .jump drops the movement transitions so
+     it appears in place when it comes back from hidden. */
+  .hover-frame {
+    position: absolute; left: 0; top: 0;
+    width: var(--frame-size, 0); height: var(--frame-size, 0);
+    transform: translate(var(--frame-x, 0), var(--frame-y, 0));
+    box-shadow: 0 0 0 2px var(--text);
+    opacity: 0; pointer-events: none; z-index: 1;
+    transition: transform calc(0.45s * var(--motion)) var(--spring),
+                width calc(0.45s * var(--motion)) var(--spring),
+                height calc(0.45s * var(--motion)) var(--spring),
+                opacity calc(0.15s * var(--motion));
+  }
+  .hover-frame.shown { opacity: 0.7; }
+  .hover-frame.jump { transition: opacity calc(0.15s * var(--motion)); }
+
   /* A win: the corners pulse in turn, a frame traces round the square, and
      the other pieces dim. */
   .cell.win-pulse {
@@ -108,15 +138,34 @@
   #status { margin: 12px 0 2px; text-align: center; font-weight: 600; }
   .green { color: var(--green); }
   .red { color: var(--red); }
-  #moves { margin: 0; text-align: center; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  /* One numbered pair of moves per line, with the position after it; the two
+     squares just played are in the brighter shade. */
+  #move-list { display: grid; align-content: start; gap: 4px; font-size: 12px; font-variant-numeric: tabular-nums; }
+  #move-list .pair { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+  #move-list .num { min-width: 1.8em; text-align: right; color: var(--muted); }
+  #move-list .plies { min-width: 3.4em; }
+  .mini-board {
+    --mini-cell: 5px;
+    display: inline-grid; grid-template-columns: repeat(5, var(--mini-cell));
+    gap: 1px; padding: 1px; background: var(--bg);
+  }
+  .mini-board span { width: var(--mini-cell); height: var(--mini-cell); background: var(--surface-2); }
+  .mini-board .player-W { background: var(--green); }
+  .mini-board .player-B { background: var(--red); }
+  .mini-board .player-W.last { background: var(--green-bright); }
+  .mini-board .player-B.last { background: var(--red-bright); }
   #error { display: none; margin: 8px 0 0; padding: 6px 8px; border-radius: 6px; background: #5c1f1b; color: #ffd9d6; font-size: 12px; white-space: pre-wrap; }
 </style>
 </head>
 <body>
 <main>
-  <div id="board"></div>
-  <p id="status">Loading the game…</p>
-  <p id="moves"></p>
+  <div class="game">
+    <div class="play">
+      <div id="board"></div>
+      <p id="status">Loading the game…</p>
+    </div>
+    <div id="move-list"></div>
+  </div>
   <p id="error"></p>
 </main>
 <script>
@@ -133,7 +182,7 @@ const DIRECTIONS = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0]
 
 const boardEl = document.getElementById('board');
 const statusEl = document.getElementById('status');
-const movesEl = document.getElementById('moves');
+const moveListEl = document.getElementById('move-list');
 const errorEl = document.getElementById('error');
 
 function showError(message) {
@@ -257,6 +306,7 @@ let owner = Array(SIZE * SIZE).fill(null);   // 'W', 'B' or null per square, as 
 let userColour = null;                       // 'W' or 'B' while the user may click
 let gameId = null;
 let winOutline;
+let hoverFrame;
 
 function buildBoard() {
   const label = (text) => {
@@ -288,6 +338,13 @@ function buildBoard() {
     }
     label('');
   }
+  hoverFrame = document.createElement('div');
+  hoverFrame.className = 'hover-frame';
+  boardEl.appendChild(hoverFrame);
+  boardEl.addEventListener('pointerleave', () => {
+    clearPreview();
+    hideFrame();
+  });
   winOutline = document.createElement('div');
   winOutline.className = 'win-outline';
   winOutline.hidden = true;
@@ -347,9 +404,28 @@ function showWin(corners) {
 }
 
 function showPreview(i) {
-  if (!userColour || owner[i]) return;
+  clearPreview();
+  if (!userColour || owner[i]) return hideFrame();
+  moveFrame(i);
   cells[i].classList.add(`ghost-${userColour}`);
   for (const j of capturesOf(owner, i, userColour)) cells[j].classList.add('would-capture');
+}
+
+// The frame springs to the square, or appears there if it was hidden.
+function moveFrame(i) {
+  const cell = cells[i];
+  const wasHidden = !hoverFrame.classList.contains('shown');
+  hoverFrame.classList.toggle('jump', wasHidden);
+  hoverFrame.style.setProperty('--frame-x', `${cell.offsetLeft}px`);
+  hoverFrame.style.setProperty('--frame-y', `${cell.offsetTop}px`);
+  hoverFrame.style.setProperty('--frame-size', `${cell.offsetWidth}px`);
+  if (wasHidden) void hoverFrame.offsetWidth;   // apply the jump before the transitions return
+  hoverFrame.classList.remove('jump');
+  hoverFrame.classList.add('shown');
+}
+
+function hideFrame() {
+  hoverFrame.classList.remove('shown');
 }
 
 function clearPreview() {
@@ -358,11 +434,41 @@ function clearPreview() {
 
 const player = (colour) => `<span class="${colour}">${colour === 'green' ? 'Green' : 'Red'}</span>`;
 
-function moveText(moves) {
-  const pairs = [];
-  for (let i = 0; i < moves.length; i += 2) pairs.push(`${i / 2 + 1}. ${moves.slice(i, i + 2).join(' ')}`);
-  return pairs.join('  ');
+// The moves as numbered pairs, each with a tiny picture of the position after
+// it; scrolled to the latest. `boards` holds [green, red] bitboards per move.
+function renderMoves(moves, boards) {
+  moveListEl.replaceChildren();
+  for (let i = 0; i < moves.length; i += 2) {
+    const pair = document.createElement('span');
+    pair.className = 'pair';
+    const number = document.createElement('span');
+    number.className = 'num';
+    number.textContent = `${i / 2 + 1}.`;
+    const plies = document.createElement('span');
+    plies.className = 'plies';
+    plies.textContent = moves.slice(i, i + 2).join(' ');
+    const last = Math.min(i + 1, moves.length - 1);
+    pair.append(number, plies, miniBoard(boards[last], moves.slice(i, i + 2).map(indexOf)));
+    moveListEl.appendChild(pair);
+  }
+  moveListEl.scrollTop = moveListEl.scrollHeight;
 }
+
+function miniBoard([green, red], lastMoves) {
+  const mini = document.createElement('span');
+  mini.className = 'mini-board';
+  for (let i = 0; i < SIZE * SIZE; i++) {
+    const cell = document.createElement('span');
+    if (green & (1 << i)) cell.className = 'player-W';
+    if (red & (1 << i)) cell.className = 'player-B';
+    if (lastMoves.includes(i)) cell.classList.add('last');
+    mini.appendChild(cell);
+  }
+  return mini;
+}
+
+// [green, red] bitboards of a board shown as owners.
+const bitboards = (owner) => ['W', 'B'].map((colour) => owner.reduce((mask, o, i) => (o === colour ? mask | (1 << i) : mask), 0));
 
 // Show the position before the last move, then play the last move in, after
 // `delay` ms, or with no animation if `delay` is negative. Does nothing if the
@@ -378,7 +484,7 @@ function showGame(game, delay = 250) {
   owner = Array(SIZE * SIZE).fill(null);
   for (const name of game.green) owner[indexOf(name)] = 'W';
   for (const name of game.red) owner[indexOf(name)] = 'B';
-  movesEl.textContent = moveText(game.moves);
+  renderMoves(game.moves, game.boards);
 
   for (const cell of cells) cell.classList.remove('last');
   if (game.last && delay < 0) {
@@ -441,6 +547,7 @@ async function onClick(i) {
   userColour = null;
   boardEl.classList.remove('open');
   clearPreview();
+  hideFrame();
   errorEl.style.display = 'none';
   const captured = capturesOf(owner, i, colour);
   const after = owner.slice();
@@ -448,7 +555,7 @@ async function onClick(i) {
   for (const j of captured) after[j] = null;
   const corners = wonSquare(after, colour);
   playOnBoard(i, colour, captured, corners);
-  movesEl.textContent = moveText([...before.moves, nameOf(i)]);
+  renderMoves([...before.moves, nameOf(i)], [...before.boards, bitboards(after)]);
   statusEl.textContent = corners ? '' : 'Claude is thinking…';
 
   let game;

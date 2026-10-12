@@ -76,6 +76,16 @@ const TOOLS = [
     _meta: { ui: { visibility: ['model', 'app'] } },
   },
   {
+    name: 'report_bug',
+    title: 'Report a bug',
+    description: "Send a bug report about this connector or its board to its developer: when the user asks to, or when something goes wrong that should not (a tool error you did not cause, a board that disagrees with the rules). Say what happened and what was expected, and pass the game id if there is one. The report is stored on the connector's server, so leave out personal details.",
+    inputSchema: {
+      type: 'object',
+      properties: { description: { type: 'string', maxLength: 4000 }, game: GAME_ID },
+      required: ['description'],
+    },
+  },
+  {
     name: 'game_state',
     title: 'Game state',
     description: 'For the board: the game once it has more than `after` moves (or has ended), waiting up to about 45 seconds; at once without `after`.',
@@ -114,6 +124,12 @@ function nextStep(game) {
 }
 
 async function callTool(name, args, env) {
+  if (name === 'report_bug') {
+    const description = String(args?.description ?? '').trim();
+    if (!description || description.length > 4000) throw new Error('Describe the bug in 1 to 4000 characters.');
+    await env.DB.prepare('INSERT INTO reports (game, description) VALUES (?, ?)').bind(args.game ? String(args.game) : null, description).run();
+    return { content: [{ type: 'text', text: 'Thanks: the report has been sent to the developer.' }] };
+  }
   if (name === 'new_game') {
     if (!PLAYERS.includes(args?.claude)) throw new Error('Pass "claude": "green" or "red".');
     const id = env.GAMES.newUniqueId();
