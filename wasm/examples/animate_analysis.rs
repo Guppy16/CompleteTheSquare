@@ -1,5 +1,6 @@
 //! An animated SVG of the page's Analysis tab, for the README. From the empty
-//! board, a cursor plays the first suggested move a few times; for every
+//! board, a cursor plays the first suggested move a few times (on its square,
+//! or a book move by clicking its line in the panel); for every
 //! position the engine's top lines appear as on the page: the panel above the
 //! board (depth, each line's score and moves, the book move first), a marker
 //! on each candidate square holding a mini board of where its line ends, with
@@ -38,6 +39,7 @@ const RESET: f64 = 0.6; // fading back to the empty board
 // Layout: the panel, then the board with the eval column on its right.
 const PANEL_H: f64 = 84.0;
 const BOARD_Y: f64 = PANEL_H + 14.0; // the board's group starts here
+const PANEL_X: f64 = 10.0;
 const EVAL_GAP: f64 = 12.0;
 const EVAL_W: f64 = 14.0;
 const LIGHT_GREEN: &str = "#8ce68f";
@@ -72,6 +74,11 @@ fn analyse(state: &State, history: &[u64]) -> Analysis {
         shown.truncate(LINES);
     }
     Analysis { depth, best, top: all[0].1, lines: shown, book, toward: state.current }
+}
+
+/// The baseline of the panel's `k`-th line.
+fn row_y(k: usize) -> f64 {
+    30.0 + 20.0 * (k as f64 + 1.0)
 }
 
 /// A score for Green as the page writes it: +0.08, or #3 for a forced win.
@@ -163,6 +170,7 @@ fn main() {
     let mut colour: Vec<Colour> = (0..25).map(|_| Colour::new(EMPTY)).collect();
     let mut scale: Vec<Track> = (0..25).map(|_| Track::new(1.0)).collect();
     let mut bar = Track::new(0.5);
+    let mut row_hover = Vec::new(); // (analysis, from, to): the top line highlighted under the cursor
     for i in 0..=plies {
         shows.push(now);
         bar.spring(now, BAR, bar.last(), share(analyses[i].best));
@@ -171,16 +179,23 @@ fn main() {
             break;
         }
         let m = moves[i];
-        let (x, y) = centre(m);
+        // A book move is played from the panel: a click on its line (the top
+        // one) plays its first move, as on the page. Others are played on the board.
+        let from_panel = analyses[i].book.is_some();
+        let (x, y) = if from_panel { (PANEL_X + 150.0, row_y(0) - 4.0 - BOARD_Y) } else { centre(m) };
         cursor_x.ease(now, TRAVEL, x + 4.0);
         cursor_y.ease(now, TRAVEL, y + 4.0);
         let arrive = now + TRAVEL;
-        frame_x.set(arrive, x - SQUARE / 2.0);
-        frame_y.set(arrive, y - SQUARE / 2.0);
-        frame_op.keys(arrive, FRAME_FADE, &[(1.0, 0.7)]);
         let click = arrive + AIM;
+        if from_panel {
+            row_hover.push((i, arrive, click));
+        } else {
+            frame_x.set(arrive, x - SQUARE / 2.0);
+            frame_y.set(arrive, y - SQUARE / 2.0);
+            frame_op.keys(arrive, FRAME_FADE, &[(1.0, 0.7)]);
+            frame_op.keys(click, FRAME_FADE, &[(1.0, 0.0)]);
+        }
         clicks.push(click);
-        frame_op.keys(click, FRAME_FADE, &[(1.0, 0.0)]);
         let (before, after) = (states[i], states[i + 1]);
         let mover = if before.current == 0 { GREEN } else { RED };
         for c in 0..25 {
@@ -215,7 +230,7 @@ fn main() {
     out.push_str("<defs><filter id=\"glow-0\" x=\"-30%\" y=\"-30%\" width=\"160%\" height=\"160%\"><feDropShadow dx=\"0\" dy=\"0\" stdDeviation=\"2\" flood-color=\"#4CAF50\"/></filter><filter id=\"glow-1\" x=\"-30%\" y=\"-30%\" width=\"160%\" height=\"160%\"><feDropShadow dx=\"0\" dy=\"0\" stdDeviation=\"2\" flood-color=\"#F44336\"/></filter></defs>\n");
 
     // The panel: depth, then the lines, as on the page.
-    let (px, pw) = (10.0, width - 20.0);
+    let (px, pw) = (PANEL_X, width - 2.0 * PANEL_X);
     out.push_str(&format!("<rect x=\"{px}\" y=\"10\" width=\"{pw:.0}\" height=\"{PANEL_H:.0}\" rx=\"4\" fill=\"#1e1e1e\"/>\n"));
     for (i, a) in analyses.iter().enumerate() {
         let vis = shown(shows[i], clicks[i], total);
@@ -224,8 +239,15 @@ fn main() {
             px + 8.0,
             a.depth
         ));
+        for &(_, from, to) in row_hover.iter().filter(|h| h.0 == i) {
+            out.push_str(&format!(
+                "<rect x=\"{px}\" y=\"{:.0}\" width=\"{pw:.0}\" height=\"20\" fill=\"#2a2a2a\" opacity=\"0\">{}</rect>\n",
+                row_y(0) - 14.0,
+                shown(from, to, total)
+            ));
+        }
         for (k, (_, score, line)) in a.lines.iter().enumerate() {
-            let y = 30.0 + 20.0 * (k as f64 + 1.0);
+            let y = row_y(k);
             let green = if a.toward == 0 { *score } else { -score };
             let is_book = a.book == Some(line[0]);
             let max = if is_book { 28 } else { 34 };
