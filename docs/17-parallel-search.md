@@ -132,4 +132,4 @@ against.
 
 ---
 
-<sub>← [16. WebAssembly and the page](16-wasm-and-page.md) · [index](README.md)</sub>
+<sub>← [16. WebAssembly and the page](16-wasm-and-page.md) · [index](README.md) · [18. Next steps](18-next-steps.md) →</sub>

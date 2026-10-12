@@ -42,6 +42,7 @@ time; afterwards each one stands alone.
 | 15 | [Measuring strength](15-measuring-strength.md) | the arena and the analyse tool, and what they showed |
 | 16 | [WebAssembly and the page](16-wasm-and-page.md) | exports, the worker, the analysis tab |
 | 17 | [Parallel search](17-parallel-search.md) | lazy SMP and root splitting for the offline tools |
+| 18 | [Next steps](18-next-steps.md) | open questions and the to-do list |
 
 ## Where the code is
 
