@@ -10,6 +10,15 @@ in your browser as WebAssembly. Can you solve the opening?
 </p>
 <p align="center"><sub>Complete the Square Gameplay</sub></p>
 
+## Analysis mode
+
+Play against the engine, or have it show its top lines for every position, as on lichess.
+Each candidate square holds a mini board of where its line ends.
+
+<p align="center">
+  <img src="docs/img/analysis.svg" alt="The Analysis tab: the engine's top lines above the board, a marker on each candidate square, and the eval bar, over three moves" width="320">
+</p>
+
 ## Credits
 
 - Game adapted from [VatsalRaina/CompleteTheSquare](https://github.com/VatsalRaina/CompleteTheSquare).

@@ -48,6 +48,7 @@ All `cargo run --release --example ...` from `wasm/`:
 | `diagram -- --moves "1. A1 C3" --mark B2` | a board as SVG, for the docs |
 | `tree_diagram -- --green A1,C1 --red B1` | a two-ply search tree with a board at every node |
 | `animate_game -- "1. A1 B2 2. C3"` | an animated SVG of a game, like the README's |
+| `animate_analysis -- 3` | an animated SVG of the Analysis tab over 3 moves, like the README's |
 
 Depth 14 takes about half an hour, depth 16 about three hours on 16 threads. Run deep
 searches one at a time.
