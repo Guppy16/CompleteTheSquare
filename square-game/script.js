@@ -571,6 +571,7 @@ function renderAnalysis(lines, depth, settled, book = -1) {
     const movesEl = document.createElement('span');
     movesEl.classList.add('moves');
     movesEl.textContent = lineText(line, ply);
+    movesEl.title = movesEl.textContent;
     row.append(scoreEl, movesEl);
     if (index === book) {
       const tag = document.createElement('span');

@@ -481,9 +481,14 @@ button[hidden] {
   color: var(--text);
 }
 
+/* One line per row: a long line ends in an ellipsis (the full line is its title). */
 #analysis .moves {
+  flex: 1;
+  min-width: 0;
   color: var(--text);
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Candidate-move markers on the board: size and opacity show the gap to the
@@ -505,7 +510,7 @@ button[hidden] {
 }
 
 #analysis .tag {
-  margin-left: auto;
+  flex: none;
   padding: 1px 6px;
   border-radius: 3px;
   background: var(--surface-2);
@@ -731,17 +736,22 @@ button[hidden] {
 }
 
 /* Analysis panel header: depth on the left, Go deeper on the right. */
+/* A fixed height, so the header does not change size when Go deeper appears. */
 #analysis .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  height: 24px;
+  margin-bottom: 4px;
 }
 
 #analysis .header button {
   margin: 0;
-  padding: 4px 10px;
-  font-size: 0.8rem;
+  padding: 2px 10px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  border-radius: 3px;
 }
 
 /* Per-move scores in the move list. */
