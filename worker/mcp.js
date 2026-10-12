@@ -7,9 +7,10 @@
 //
 //   new_game -> play (Claude's move) -> wait_for_move (until the user clicks) -> play -> ...
 //
-// new_game's and play's results are drawn by board.html (an MCP App) in the
-// chat. A click there calls user_move, which wakes the waiting wait_for_move,
-// so the user never has to send a message.
+// new_game's result is drawn by board.html (an MCP App) in the chat, one board
+// for the whole game. A click there calls user_move, which wakes the waiting
+// wait_for_move, so the user never has to send a message; the board follows
+// Claude's moves through game_state, a tool only the board sees.
 
 import boardHtml from './board.html';
 import { PLAYERS, other, parseSquare } from './rules.js';
@@ -46,7 +47,7 @@ const TOOLS = [
   {
     name: 'new_game',
     title: 'New game of Complete the Square',
-    description: `Start a game of Complete the Square against the user, and show the board.\n\n${HOW_TO_PLAY}\n\n${RULES}`,
+    description: `Start a game of Complete the Square against the user, and show the board, which follows the game from then on.\n\n${HOW_TO_PLAY}\n\n${RULES}`,
     inputSchema: {
       type: 'object',
       properties: { claude: { type: 'string', enum: PLAYERS, description: 'The colour you (Claude) play. Green moves first.' } },
@@ -57,9 +58,8 @@ const TOOLS = [
   {
     name: 'play',
     title: 'Play a move',
-    description: 'Play your move in a game, and show the board. Then call wait_for_move.',
+    description: "Play your move in a game; the board from new_game shows it. Then call wait_for_move.",
     inputSchema: { type: 'object', properties: { game: GAME_ID, move: SQUARE }, required: ['game', 'move'] },
-    _meta: { ui: { resourceUri: BOARD_URI } },
   },
   {
     name: 'wait_for_move',
@@ -74,6 +74,14 @@ const TOOLS = [
     description: "Play the user's move. The board calls this when the user clicks; call it yourself only when the user names their move in the chat instead. Never choose a move for the user.",
     inputSchema: { type: 'object', properties: { game: GAME_ID, move: SQUARE }, required: ['game', 'move'] },
     _meta: { ui: { visibility: ['model', 'app'] } },
+  },
+  {
+    name: 'game_state',
+    title: 'Game state',
+    description: 'For the board: the game once it has more than `after` moves (or has ended), waiting up to about 45 seconds; at once without `after`.',
+    inputSchema: { type: 'object', properties: { game: GAME_ID, after: { type: 'integer', minimum: 0 } }, required: ['game'] },
+    annotations: { readOnlyHint: true },
+    _meta: { ui: { visibility: ['app'] } },
   },
 ];
 
@@ -119,6 +127,10 @@ async function callTool(name, args, env) {
   }
   if (name === 'user_move') {
     const game = await stub.move('user', parseSquare(args.move));
+    return result(game, gameId, nextStep(game));
+  }
+  if (name === 'game_state') {
+    const game = await stub.watch(Number.isInteger(args.after) ? args.after : undefined);
     return result(game, gameId, nextStep(game));
   }
   if (name === 'wait_for_move') {

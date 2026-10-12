@@ -1,12 +1,13 @@
 // One game between Claude and a user: a Durable Object, so every request about
 // the game reaches the same place. It keeps the moves, checks each one with
-// the rules, and holds Claude's wait_for_move call open until the user's
-// click (user_move) arrives. A finished game goes into the games table.
+// the rules, and holds calls that wait for a move open until one is played:
+// Claude's wait_for_move for the user's click, the board's game_state for
+// Claude's reply. A finished game goes into the games table.
 
 import { DurableObject } from 'cloudflare:workers';
 import { other, position } from './rules.js';
 
-// How long one wait_for_move call waits for the user before Claude asks again.
+// How long a call waits for a move before it returns and is made again.
 const WAIT_MS = 45_000;
 
 export class Game extends DurableObject {
@@ -34,7 +35,7 @@ export class Game extends DurableObject {
     const moves = [...(await this.ctx.storage.get('moves')), square];
     const after = { ...position(moves), claude: before.claude };
     await this.ctx.storage.put('moves', moves);
-    if (by === 'user') for (const wake of this.waiting.splice(0)) wake();
+    for (const wake of this.waiting.splice(0)) wake();
     if (after.toMove === null) await this.record(after);
     return after;
   }
@@ -43,11 +44,24 @@ export class Game extends DurableObject {
   async waitForUser() {
     const game = await this.view();
     if (game.toMove !== other(game.claude)) return game;
-    await new Promise((resolve) => {
+    await this.nextMove();
+    return this.view();
+  }
+
+  // The game once it has more than `after` moves (or has ended), or as it
+  // stands after WAIT_MS; at once without `after`.
+  async watch(after) {
+    const game = await this.view();
+    if (after === undefined || game.moves.length > after || game.toMove === null) return game;
+    await this.nextMove();
+    return this.view();
+  }
+
+  nextMove() {
+    return new Promise((resolve) => {
       this.waiting.push(resolve);
       setTimeout(resolve, WAIT_MS);
     });
-    return this.view();
   }
 
   async record(game) {
