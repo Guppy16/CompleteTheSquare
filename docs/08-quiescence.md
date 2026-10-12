@@ -60,7 +60,6 @@ pub fn quiescence(s: &mut Search, state: &State, mut alpha: f64, beta: f64, qdep
 
 Three ideas are in there.
 
-> [!TIP]
 > **"Stand pat"** is poker slang: to keep the hand you have rather than draw new cards.
 > Here it means the side to move may decline every capture and accept the static
 > evaluation of the position as it is.

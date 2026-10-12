@@ -7,18 +7,17 @@ time; afterwards each one stands alone.
 
 <p align="center"><img src="img/how-to-play.svg" alt="an animated game" width="280"></p>
 
-> [!NOTE]
-> **Glossary**
->
-> | term | meaning |
-> |------|---------|
-> | **ply** | one player's move. A numbered "move" in the move list is a pair of plies, one per side. |
-> | **node** | one position visited by the search. Speeds and budgets are counted in nodes. |
-> | **depth** | how many plies ahead the search looks from the current position. |
-> | **horizon** | the depth at which the search stops and asks the evaluation instead of looking further. |
-> | **score** | how good a position is for the **side to move**, from -1 (lost) to +1 (won); anything strictly between ±0.5 is a heuristic guess. The page shows scores for Green, as lichess shows them for White. |
-> | **forced win** | a line where every defence loses; scores just above +1 (a sooner win scores higher). |
-> | **square names** | columns A–E left to right, rows 1–5 top to bottom. Green moves first. |
+## Glossary
+
+| term | meaning |
+|------|---------|
+| **ply** | one player's move. A numbered "move" in the move list is a pair of plies, one per side. |
+| **node** | one position visited by the search. Speeds and budgets are counted in nodes. |
+| **depth** | how many plies ahead the search looks from the current position. |
+| **horizon** | the depth at which the search stops and asks the evaluation instead of looking further. |
+| **score** | how good a position is for the **side to move**, from -1 (lost) to +1 (won); anything strictly between ±0.5 is a heuristic guess. The page shows scores for Green, as lichess shows them for White. |
+| **forced win** | a line where every defence loses; scores just above +1 (a sooner win scores higher). |
+| **square names** | columns A–E left to right, rows 1–5 top to bottom. Green moves first. |
 
 ## The pages
 
