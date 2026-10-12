@@ -1,4 +1,4 @@
-"""Deploy the games Worker to Cloudflare.
+"""Deploy the games Worker (and its MCP connector) to Cloudflare.
 
     set -a && . ./.env && python3 worker/deploy.py
 
@@ -51,11 +51,15 @@ def upload_worker(account: str, database: str) -> None:
             },
         ],
     }
-    script = (HERE / "index.js").read_text()
-    files = {
-        "metadata": (None, json.dumps(metadata), "application/json"),
-        "index.js": ("index.js", script, "application/javascript+module"),
+    modules = {
+        "index.js": (HERE / "index.js", "application/javascript+module"),
+        "mcp.js": (HERE / "mcp.js", "application/javascript+module"),
+        "board.html": (HERE / "board.html", "text/plain"),
+        "ai.wasm": (HERE.parent / "square-game" / "ai.wasm", "application/wasm"),
     }
+    files = {"metadata": (None, json.dumps(metadata), "application/json")}
+    for name, (path, content_type) in modules.items():
+        files[name] = (name, path.read_bytes(), content_type)
     call("PUT", f"/accounts/{account}/workers/scripts/{NAME}", files=files)
 
 
@@ -72,6 +76,7 @@ def main() -> None:
 
     subdomain = call("GET", f"/accounts/{account}/workers/subdomain")["subdomain"]
     print(f"https://{NAME}.{subdomain}.workers.dev/games")
+    print(f"https://{NAME}.{subdomain}.workers.dev/mcp")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Complete the Square</title>
+<style>
+  /* The game's palette (square-game/style.css). The text follows the host's theme. */
+  :root {
+    --board: #1e1e1e;
+    --cell: #2a2a2a;
+    --line: #3a3a3a;
+    --green: #4CAF50;
+    --red: #F44336;
+    --accent: #ff9900;
+    --text: #1f1f1f;
+    --muted: #6b6b6b;
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] { --text: #e6e6e6; --muted: #8a8a8a; color-scheme: dark; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --text: #e6e6e6; --muted: #8a8a8a; color-scheme: dark; }
+  }
+  html, body { margin: 0; background: transparent; }
+  body { font: 14px/1.4 system-ui, sans-serif; color: var(--text); padding: 8px 0; }
+  main { width: min(100%, 340px); margin: 0 auto; }
+  svg { display: block; width: 100%; height: auto; user-select: none; }
+  .label { fill: var(--muted); font-size: 11px; text-anchor: middle; dominant-baseline: central; }
+  .cell { fill: var(--cell); }
+  .cell.open { cursor: pointer; }
+  .cell.open:hover { fill: #333; }
+  .ghost { pointer-events: none; opacity: 0; }
+  .cell.open:hover + .ghost { opacity: 0.4; }
+  .piece { transition: r 0.2s; }
+  .last { fill: none; stroke: #fff; stroke-width: 2.5; }
+  .captured { fill: none; stroke-width: 2; stroke-dasharray: 4 4; opacity: 0.7; }
+  .win { fill: none; stroke: var(--accent); stroke-width: 4; stroke-linejoin: round; }
+  #status { margin: 8px 0 2px; text-align: center; font-weight: 600; }
+  #moves { margin: 0; text-align: center; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  #error { display: none; margin: 8px 0 0; padding: 6px 8px; border-radius: 6px; background: #5c1f1b; color: #ffd9d6; font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <svg id="board" viewBox="0 0 280 280" role="img" aria-label="Board"></svg>
+  <p id="status">Loading the game…</p>
+  <p id="moves"></p>
+  <p id="error"></p>
+</main>
+<script>
+// The view for the `play` tool (worker/mcp.js). The host sends the tool's
+// result once; this draws it. When it is the user's turn, clicking an empty
+// square sends "I play C3." to the chat, and Claude answers with its move.
+// Messages to the host are JSON-RPC over postMessage (the MCP Apps spec).
+
+const SIZE = 5;
+const COLUMNS = 'ABCDE';
+const CELL = 50;
+const PAD = 20;
+const SVG = 'http://www.w3.org/2000/svg';
+
+const boardEl = document.getElementById('board');
+const statusEl = document.getElementById('status');
+const movesEl = document.getElementById('moves');
+const errorEl = document.getElementById('error');
+
+function showError(message) {
+  errorEl.textContent = message;
+  errorEl.style.display = 'block';
+}
+window.addEventListener('error', (event) => showError(event.message));
+window.addEventListener('unhandledrejection', (event) => showError(String(event.reason?.message ?? event.reason)));
+
+// --- Talking to the host ---------------------------------------------------
+
+let nextId = 1;
+const pending = new Map();
+
+function send(message) {
+  window.parent.postMessage({ jsonrpc: '2.0', ...message }, '*');
+}
+
+function request(method, params) {
+  const id = nextId++;
+  send({ id, method, params });
+  return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
+}
+
+const handlers = {
+  'ui/notifications/tool-result': (params) => {
+    if (params.isError) {
+      statusEl.textContent = 'That move was not accepted.';
+      return showError(params.content?.map((c) => c.text).join('\n') ?? 'The tool failed.');
+    }
+    if (!params.structuredContent) throw new Error('The tool result has no game in it.');
+    draw(params.structuredContent);
+  },
+  'ui/notifications/tool-cancelled': () => { statusEl.textContent = 'Cancelled.'; },
+  'ui/notifications/host-context-changed': (params) => applyContext(params),
+};
+
+window.addEventListener('message', (event) => {
+  if (event.source !== window.parent) return;
+  const message = event.data;
+  if (message?.jsonrpc !== '2.0') return;
+  if (message.method === undefined) {                       // a reply to one of our requests
+    const waiting = pending.get(message.id);
+    if (!waiting) return;
+    pending.delete(message.id);
+    if (message.error) waiting.reject(new Error(message.error.message));
+    else waiting.resolve(message.result);
+  } else if (message.id !== undefined) {                    // a request: ping, teardown
+    send({ id: message.id, result: {} });
+  } else {
+    handlers[message.method]?.(message.params);
+  }
+});
+
+function applyContext(context) {
+  if (context?.theme) document.documentElement.dataset.theme = context.theme;
+}
+
+async function connect() {
+  const result = await request('ui/initialize', {
+    appInfo: { name: 'Complete the Square', version: '1.0.0' },
+    appCapabilities: {},
+    protocolVersion: '2026-01-26',
+  });
+  applyContext(result?.hostContext);
+  send({ method: 'ui/notifications/initialized' });
+  new ResizeObserver(() => {
+    send({ method: 'ui/notifications/size-changed', params: { width: document.body.scrollWidth, height: document.body.scrollHeight } });
+  }).observe(document.body);
+}
+
+// --- The board ---------------------------------------------------------------
+
+function element(name, attributes, parent = boardEl) {
+  const el = document.createElementNS(SVG, name);
+  for (const [key, value] of Object.entries(attributes)) el.setAttribute(key, value);
+  parent.appendChild(el);
+  return el;
+}
+
+// "C3" -> the centre of its square on the board.
+function centre(name) {
+  const col = COLUMNS.indexOf(name[0]);
+  const row = Number(name.slice(1)) - 1;
+  return [PAD + col * CELL + CELL / 2, PAD + row * CELL + CELL / 2];
+}
+
+function draw(game) {
+  boardEl.replaceChildren();
+  const user = game.claude === 'green' ? 'red' : 'green';
+  const owner = {};
+  for (const name of game.green) owner[name] = 'green';
+  for (const name of game.red) owner[name] = 'red';
+  const yourTurn = game.toMove === user;
+
+  for (let i = 0; i < SIZE; i++) {
+    element('text', { class: 'label', x: PAD + i * CELL + CELL / 2, y: PAD / 2 }).textContent = COLUMNS[i];
+    element('text', { class: 'label', x: PAD / 2, y: PAD + i * CELL + CELL / 2 }).textContent = i + 1;
+  }
+  element('rect', { x: PAD - 2, y: PAD - 2, width: SIZE * CELL + 4, height: SIZE * CELL + 4, rx: 8, fill: 'var(--board)' });
+
+  for (let row = 0; row < SIZE; row++) {
+    for (let col = 0; col < SIZE; col++) {
+      const name = COLUMNS[col] + (row + 1);
+      const [x, y] = centre(name);
+      const open = yourTurn && !owner[name];
+      const cell = element('rect', { class: open ? 'cell open' : 'cell', x: x - CELL / 2 + 2, y: y - CELL / 2 + 2, width: CELL - 4, height: CELL - 4, rx: 6 });
+      if (open) {
+        element('circle', { class: 'ghost', cx: x, cy: y, r: 16, fill: `var(--${user})` });
+        cell.addEventListener('click', () => playMove(name, user));
+      }
+      if (owner[name]) element('circle', { class: 'piece', cx: x, cy: y, r: 16, fill: `var(--${owner[name]})` });
+    }
+  }
+
+  // Pieces the last move removed, as dashed outlines in their colour.
+  const capturedColour = owner[game.last] === 'green' ? 'red' : 'green';
+  for (const name of game.captured) {
+    const [x, y] = centre(name);
+    element('circle', { class: 'captured', cx: x, cy: y, r: 15, stroke: `var(--${capturedColour})` });
+  }
+  if (game.last) {
+    const [x, y] = centre(game.last);
+    element('circle', { class: 'last', cx: x, cy: y, r: 19 });
+  }
+  if (game.winningSquare.length === 4) {
+    const points = game.winningSquare.map(centre);
+    const xs = points.map((p) => p[0]);
+    const ys = points.map((p) => p[1]);
+    const [left, right, top, bottom] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    element('rect', { class: 'win', x: left, y: top, width: right - left, height: bottom - top, rx: 4 });
+  }
+
+  if (game.winner) statusEl.textContent = game.winner === user ? `You win (${user})!` : `Claude wins (${game.winner}).`;
+  else if (game.draw) statusEl.textContent = 'Draw: the same position for the third time.';
+  else statusEl.textContent = `Your move: you are ${user}. Click a square.`;
+  movesEl.textContent = moveText(game.moves);
+}
+
+function moveText(moves) {
+  const pairs = [];
+  for (let i = 0; i < moves.length; i += 2) pairs.push(`${i / 2 + 1}. ${moves.slice(i, i + 2).join(' ')}`);
+  return pairs.join('  ');
+}
+
+// Send the user's move to Claude, and leave this board as it was played.
+async function playMove(name, user) {
+  for (const cell of boardEl.querySelectorAll('.open')) cell.classList.remove('open');
+  for (const ghost of boardEl.querySelectorAll('.ghost')) ghost.remove();
+  const [x, y] = centre(name);
+  const piece = element('circle', { class: 'piece', cx: x, cy: y, r: 16, fill: `var(--${user})`, opacity: 0.6 });
+  statusEl.textContent = `You played ${name}. Waiting for Claude…`;
+  try {
+    const result = await request('ui/message', { role: 'user', content: [{ type: 'text', text: `I play ${name}.` }] });
+    if (result?.isError) throw new Error('The chat did not take the message.');
+  } catch (error) {
+    piece.remove();
+    statusEl.textContent = 'Could not send the move. Type it in the chat instead.';
+    showError(error.message);
+  }
+}
+
+connect();
+</script>
+</body>
+</html>

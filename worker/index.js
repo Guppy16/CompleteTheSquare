@@ -1,10 +1,13 @@
-// Stores finished games sent by the page, in D1 (Cloudflare's SQLite).
+// Stores finished games sent by the page, in D1 (Cloudflare's SQLite), and
+// serves the MCP connector for playing against Claude (mcp.js).
 //
 //   POST /games  {"id": "...", "moves": "1. A1 B2  2. C3", "result": "green", "mode": "ai", "date": "..."}
 //
 // Only the game is stored: no IP, no user ID. The rate limiter counts requests
 // per IP in memory and never stores the IP. The body is sent as text/plain, so
 // the browser needs no preflight request.
+
+import { handleMcp } from './mcp.js';
 
 const RESULTS = ['green', 'red', 'draw'];
 const MODES = ['board', 'ai', 'analysis'];
@@ -16,6 +19,7 @@ function reply(status, text = '') {
 
 export default {
   async fetch(request, env) {
+    if (new URL(request.url).pathname === '/mcp') return handleMcp(request);
     if (request.method !== 'POST' || new URL(request.url).pathname !== '/games') return reply(404, 'not found');
 
     const { success } = await env.LIMITER.limit({ key: request.headers.get('CF-Connecting-IP') || 'unknown' });
