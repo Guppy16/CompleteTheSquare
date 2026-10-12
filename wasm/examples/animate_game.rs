@@ -4,7 +4,9 @@
 //! the one it plays with the frame springing across, and lingers on the
 //! capture hints) before it clicks; the piece lands with a spring and captured
 //! pieces swell and fade. A win pulses its corners, traces a frame round the square and dims
-//! the rest. Loops. GitHub plays SVG (SMIL) animations inline in Markdown.
+//! the rest. Under the board, the rules appear one at a time as the game reaches them:
+//! placing, from the start; capturing, from the first capture; winning, from the move
+//! that makes the last threat. Loops. GitHub plays SVG (SMIL) animations inline in Markdown.
 //!
 //! Timings are the page's (style.css) times its --motion, and the spring is
 //! the same sampled curve. SMIL has no linear() easing, so the curve is written
@@ -37,7 +39,7 @@ const TRACE: f64 = 0.6 * MOTION; // the win's frame drawing itself
 
 // The cursor's pace (not on the page: this is the player).
 const SLOW_CAPTURES: usize = 3; // the first this many captures are played slowly
-const START: f64 = 0.4; // before the first move
+const START: f64 = 1.0; // before the first move, long enough to read the first rule
 const TRAVEL: f64 = 0.3; // gliding to the first square it hovers
 const QUICK_AIM: f64 = 0.15; // a quick move: hovering its square before the click
 const LOOK: f64 = 0.45; // a slow move: hovering a neighbouring square
@@ -46,6 +48,10 @@ const AIM: f64 = 0.9; // lingering on the capture hints before the click
 const AFTER: f64 = 0.3; // after the click, before the next move
 const HOLD: f64 = 2.5; // on the final position
 const RESET: f64 = 0.6; // fading back to the empty board
+const PHRASE_FADE: f64 = 0.3; // one rule fading out as the next fades in
+
+const RULES: [&str; 3] =
+    ["Place a piece on an empty square", "Capture and remove sandwiched pieces", "Complete the corners of a square to win"];
 
 const CELL: f64 = 44.0;
 const PAD: f64 = 28.0;
@@ -248,11 +254,13 @@ fn main() {
     let mut ghosts = Vec::new(); // (square, colour, appear, leave)
     let mut hints = Vec::new(); // (square, appear, leave)
     let mut clicks = Vec::new();
+    let mut starts = Vec::new(); // when the cursor sets off for each move
     let mut now = START;
     let mut slow_left = SLOW_CAPTURES;
 
     for i in 0..n {
         let (before, after, m) = (states[i], states[i + 1], moves[i]);
+        starts.push(now);
         let mover = if before.current == 0 { GREEN } else { RED };
         let slow = slow_left > 0 && captures(&before, m) != 0;
         let first = if slow { neighbour(&before, m, (cursor_x.last(), cursor_y.last())) } else { m };
@@ -333,11 +341,11 @@ fn main() {
     }
     cursor_x.ease(reset, RESET, rest.0);
     cursor_y.ease(reset, RESET, rest.1);
-    let total = reset + RESET + 0.3;
+    let total = reset + RESET + PHRASE_FADE;
 
     let board = 5.0 * CELL;
     let width = PAD + board + PAD;
-    let height = PAD + board + 44.0;
+    let height = PAD + board + 66.0;
     let mut out = format!(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width:.0}\" height=\"{height:.0}\" viewBox=\"0 0 {width:.0} {height:.0}\" font-family=\"system-ui, sans-serif\">\n<rect width=\"100%\" height=\"100%\" rx=\"10\" fill=\"#121212\"/>\n"
     );
@@ -440,8 +448,39 @@ fn main() {
         ));
     }
 
-    // Caption: the move just played.
-    let cap_y = PAD + board + 30.0;
+    // The rules, one at a time: capturing from the cursor setting off for the
+    // first capture, winning from the winner's move that last made three of the
+    // four corners theirs (the threat that stands until the win).
+    let first_capture = (0..n).find(|&i| states[i].occupied() & !states[i + 1].occupied() != 0);
+    let winner = states[n].current;
+    let threat = (0..n)
+        .rev()
+        .filter(|&i| states[i].current == winner)
+        .find(|&i| (states[i].boards[winner] & win_mask).count_ones() < 3 && i + 1 < n);
+    let changes = [first_capture.map(|i| starts[i]), threat.filter(|_| win_mask != 0).map(|i| starts[i])];
+    let mut bounds = vec![0.0];
+    bounds.extend(changes.iter().flatten());
+    bounds.push(reset);
+    for (k, rule) in RULES.iter().enumerate().take(bounds.len() - 1) {
+        let mut op = Track::new(if k == 0 { 1.0 } else { 0.0 });
+        if k > 0 {
+            op.keys(bounds[k] + PHRASE_FADE, PHRASE_FADE, &[(1.0, 1.0)]); // after the last one has gone
+        }
+        op.keys(bounds[k + 1], PHRASE_FADE, &[(1.0, 0.0)]);
+        if k == 0 {
+            op.keys(reset + RESET, PHRASE_FADE, &[(1.0, 1.0)]); // back for the next loop
+        }
+        out.push_str(&format!(
+            "<text x=\"{:.0}\" y=\"{:.0}\" fill=\"#e6e6e6\" font-size=\"15\" font-weight=\"600\" text-anchor=\"middle\" opacity=\"{}\">{rule}{}</text>\n",
+            PAD + board / 2.0,
+            PAD + board + 30.0,
+            if k == 0 { 1 } else { 0 },
+            op.svg("opacity", total)
+        ));
+    }
+
+    // Under the rule: the move just played.
+    let cap_y = PAD + board + 52.0;
     for i in 0..n {
         let num = if i % 2 == 0 { format!("{}.", i / 2 + 1) } else { format!("{}...", i / 2 + 1) };
         let side = if i % 2 == 0 { "Green" } else { "Red" };
@@ -459,7 +498,7 @@ fn main() {
         let off = if i + 1 == n { reset } else { clicks[i + 1] };
         op.keys(off, 0.05, &[(1.0, 0.0)]);
         out.push_str(&format!(
-            "<text x=\"{:.0}\" y=\"{cap_y:.0}\" fill=\"#e6e6e6\" font-size=\"14\" text-anchor=\"middle\" opacity=\"0\">{caption}{}</text>\n",
+            "<text x=\"{:.0}\" y=\"{cap_y:.0}\" fill=\"#8a8a8a\" font-size=\"13\" text-anchor=\"middle\" opacity=\"0\">{caption}{}</text>\n",
             PAD + board / 2.0,
             op.svg("opacity", total)
         ));
