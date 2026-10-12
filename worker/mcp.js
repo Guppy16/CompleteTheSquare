@@ -211,9 +211,15 @@ export async function handleMcp(request, env) {
   // Notifications and replies to us need no answer.
   if (message.id === undefined || message.method === undefined) return new Response(null, { status: 202, headers: HEADERS });
 
+  // One line per request in the Worker's logs: the method, the tool and how it went.
+  const started = Date.now();
+  const what = [message.method, message.params?.name, JSON.stringify(message.params?.arguments ?? '')].filter(Boolean).join(' ');
   try {
-    return json({ jsonrpc: '2.0', id: message.id, result: await handle(message, env) });
+    const result = await handle(message, env);
+    console.log(`${what} -> ${result?.isError ? `tool error: ${result.content[0].text}` : 'ok'} in ${Date.now() - started} ms`);
+    return json({ jsonrpc: '2.0', id: message.id, result });
   } catch (error) {
+    console.log(`${what} -> threw ${error.message} after ${Date.now() - started} ms`);
     if (error.code === undefined) throw error;
     return json({ jsonrpc: '2.0', id: message.id, error: { code: error.code, message: error.message } });
   }
