@@ -21,6 +21,7 @@ const ANALYSIS_LINES = 3;              // how many candidate lines to show
 const EVALUATE_BUDGET = 150000;        // per position, for the scores next to each move
 const CANDIDATES_MS = 600;             // how long the AI's candidate blobs show before it plays (times --motion)
 const WIN_DEPTH_BONUS = 0.01;          // as in search.rs: a forced win scores 1 + this per ply to spare
+const DRAW_CONTEMPT = 0.2;             // as in search.rs: a line that repeats scores exactly ±this
 const WASM_URL = 'square-game/ai.wasm';
 const WORKER_URL = 'square-game/worker.js';
 const COLOURS = ['W', 'B'];            // player 0 is green (W), player 1 is red (B)
@@ -420,6 +421,7 @@ function greenScore(score) {
 // the square is completed, so with the depth the distance can be read back.
 // Without it (the move list's scores) the count is left off.
 function scoreText(green, depth) {
+  if (isDraw(green)) return '0.00';
   if (Math.abs(green) < 1) return (green >= 0 ? '+' : '') + green.toFixed(2);
   const sign = green < 0 ? '-' : '';
   if (depth === undefined) return `#${sign}`;
@@ -495,8 +497,17 @@ function goDeeper() {
   if (!analysisRunning) continueAnalysis(analysisBudget * 2);
 }
 
+// A line that ends in a repetition. The engine scores it ±DRAW_CONTEMPT, so
+// that it avoids draws, but it is shown as what it is: level. (A heuristic
+// score of exactly ±0.2 would be taken for a draw too; in 270k self-play
+// positions, the exact value was the draws.)
+function isDraw(score) {
+  return Math.abs(score) === DRAW_CONTEMPT;
+}
+
 // An eval bar's green part for a score: half for level, all for a forced win.
 function evalShare(green) {
+  if (isDraw(green)) return '50%';
   return `${50 + 50 * Math.max(-1, Math.min(1, green))}%`;
 }
 
