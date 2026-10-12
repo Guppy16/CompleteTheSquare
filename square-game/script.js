@@ -505,10 +505,19 @@ function isDraw(score) {
   return Math.abs(score) === DRAW_CONTEMPT;
 }
 
-// An eval bar's green part for a score: half for level, all for a forced win.
+// An eval bar's green part: Green's chance of winning. Half for a draw, all or
+// nothing for a forced result, and otherwise the curve measured in 20,000
+// self-play games at the page's strength (wasm/examples/calibrate.rs): an
+// arctan, steep around 0, that levels off WIN_CHANCE_FLOOR short of 0 and 1.
+// A lead of +0.05 fills 80% of the bar, +0.1 88%, +0.2 93%.
+const WIN_CHANCE_SLOPE = 31;
+const WIN_CHANCE_FLOOR = 0.025;
+
 function evalShare(green) {
   if (isDraw(green)) return '50%';
-  return `${50 + 50 * Math.max(-1, Math.min(1, green))}%`;
+  if (Math.abs(green) >= 1) return green > 0 ? '100%' : '0%';
+  const chance = WIN_CHANCE_FLOOR + (1 - 2 * WIN_CHANCE_FLOOR) * (0.5 + Math.atan(WIN_CHANCE_SLOPE * green) / Math.PI);
+  return `${(100 * chance).toFixed(1)}%`;
 }
 
 function renderAnalysis(lines, depth, settled, book = -1) {
