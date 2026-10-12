@@ -790,7 +790,13 @@ function loadMoves(moves) {
 // key's prefix. Listed in the Analysis tab; a click loads one. Storage can be
 // blocked (a private window, site data cleared): then the list is not kept,
 // and play carries on as normal.
+//
+// Each game is also sent to GAMES_URL (worker/), oldest unsent first, one per
+// page load and one after each finished game, and marked sent once stored.
+// A game that cannot be sent (offline, rate-limited) waits for the next try,
+// without a word: sending is not part of playing.
 const PAST_GAMES = 100;
+const GAMES_URL = 'https://cts-games.guppy16.workers.dev/games';
 const PAST_GAMES_KEY = 'cts:games';
 const MODE_NAMES = { board: 'Over the board', ai: 'Against AI', analysis: 'Analysis' };
 
@@ -805,12 +811,35 @@ function readPastGames() {
   return text === null ? [] : JSON.parse(text);   // corrupt data throws: a bug to report
 }
 
+function writePastGames(games) {
+  try {
+    localStorage.setItem(PAST_GAMES_KEY, JSON.stringify(games.slice(0, PAST_GAMES)));
+  } catch (err) {
+    console.warn('Past games are not kept: storage is blocked or full.', err);
+  }
+}
+
+async function sendNextGame() {
+  const game = readPastGames().findLast(g => g.sent === false);
+  if (!game) return;
+  const { id, moves, result, mode, date } = game;
+  try {
+    const response = await fetch(GAMES_URL, { method: 'POST', body: JSON.stringify({ id, moves, result, mode, date }) });
+    if (!response.ok) return;
+  } catch {
+    return;                            // offline or blocked: try again later
+  }
+  writePastGames(readPastGames().map(g => (g.id === id ? { ...g, sent: true } : g)));
+}
+
 function saveFinishedGame() {
   const moves = moveText();
   const games = readPastGames();
   if (games.some(game => game.moves === moves)) return;   // render() runs often once a game is over
   const winner = ai.winner();
   games.unshift({
+    id: crypto.randomUUID(),
+    sent: false,
     moves,
     result: winner === 0 ? 'green' : winner === 1 ? 'red' : 'draw',
     mode,
@@ -818,11 +847,8 @@ function saveFinishedGame() {
     last: [0, 1].map(k => ai.move_count() - 1 - k).filter(p => p >= 0).map(p => ai.move_at(p)),
     date: new Date().toISOString(),
   });
-  try {
-    localStorage.setItem(PAST_GAMES_KEY, JSON.stringify(games.slice(0, PAST_GAMES)));
-  } catch (err) {
-    console.warn('Past games are not kept: storage is blocked or full.', err);
-  }
+  writePastGames(games);
+  sendNextGame();
 }
 
 function renderPastGames() {
@@ -968,6 +994,7 @@ async function loadAI() {
   const { instance } = await WebAssembly.instantiate(bytes, {});
   ai = instance.exports;
   newGame();
+  sendNextGame();
 }
 
 buildBoard();
