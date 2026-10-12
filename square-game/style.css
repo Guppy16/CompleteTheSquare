@@ -337,6 +337,66 @@ button[hidden] {
   display: none;
 }
 
+/* Past games, in the Analysis tab: the final position, the result, and when. */
+#past-games {
+  width: min(100%, var(--board-max));
+  max-height: 16em;
+  overflow-y: auto;
+  margin-top: 12px;
+  padding: 6px 8px;
+  background: var(--surface);
+  border-radius: 4px;
+  text-align: left;
+}
+
+#past-games[hidden] {
+  display: none;
+}
+
+#past-games .heading {
+  padding: 2px 2px 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+#past-games .game {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 4px 2px;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+  color: var(--text);
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+#past-games .game:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+#past-games .game:active:not(:disabled) {
+  transform: none;                     /* a list row, not a button to squash */
+}
+
+#past-games .result {
+  display: block;
+  font-weight: 700;
+}
+
+#past-games .result.green { color: var(--green); }
+#past-games .result.red { color: var(--red); }
+
+#past-games .info {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 #move-list:not(:empty) {
   display: grid;
   grid-template-columns: 1fr;   /* one move per line */

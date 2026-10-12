@@ -40,6 +40,7 @@ const copyButton = document.getElementById('copy-moves');
 const hintButton = document.getElementById('hint');
 const pasteButton = document.getElementById('paste-moves');
 const moveListEl = document.getElementById('move-list');
+const pastGamesEl = document.getElementById('past-games');
 const analysisEl = document.getElementById('analysis');
 const evalColumn = document.getElementById('eval-column');
 const evalBar = document.getElementById('eval-bar');
@@ -232,6 +233,8 @@ function render() {
   hintButton.hidden = mode === 'analysis';
   hintButton.disabled = waiting || over;
   renderMoves();
+  if (over) saveFinishedGame();
+  renderPastGames();
   boardEl.classList.remove('thinking');
   startAnalysis();                     // no-op unless in analysis mode
 }
@@ -762,6 +765,11 @@ function onPasteMoves() {
     statusEl.textContent = 'Could not read those moves.';
     return;
   }
+  loadMoves(moves);
+}
+
+// Start a new game from a list of [row, col] moves.
+function loadMoves(moves) {
   ai.reset();
   for (const [i, [row, col]] of moves.entries()) {
     if (!ai.play(row, col)) {
@@ -773,6 +781,79 @@ function onPasteMoves() {
   render();
   logMoves();
   if (isAITurn()) requestAIMove();
+}
+
+// --- Past games --------------------------------------------------------------
+//
+// The last PAST_GAMES finished games, newest first, in this browser's
+// localStorage. Every guppy16.github.io page shares that storage, hence the
+// key's prefix. Listed in the Analysis tab; a click loads one. Storage can be
+// blocked (a private window, site data cleared): then the list is not kept,
+// and play carries on as normal.
+const PAST_GAMES = 100;
+const PAST_GAMES_KEY = 'cts:games';
+const MODE_NAMES = { board: 'Over the board', ai: 'Against AI', analysis: 'Analysis' };
+
+function readPastGames() {
+  let text;
+  try {
+    text = localStorage.getItem(PAST_GAMES_KEY);
+  } catch (err) {
+    console.warn('Past games are not kept: storage is blocked.', err);
+    return [];
+  }
+  return text === null ? [] : JSON.parse(text);   // corrupt data throws: a bug to report
+}
+
+function saveFinishedGame() {
+  const moves = moveText();
+  const games = readPastGames();
+  if (games.some(game => game.moves === moves)) return;   // render() runs often once a game is over
+  const winner = ai.winner();
+  games.unshift({
+    moves,
+    result: winner === 0 ? 'green' : winner === 1 ? 'red' : 'draw',
+    mode,
+    boards: [ai.board(0), ai.board(1)],
+    last: [0, 1].map(k => ai.move_count() - 1 - k).filter(p => p >= 0).map(p => ai.move_at(p)),
+    date: new Date().toISOString(),
+  });
+  try {
+    localStorage.setItem(PAST_GAMES_KEY, JSON.stringify(games.slice(0, PAST_GAMES)));
+  } catch (err) {
+    console.warn('Past games are not kept: storage is blocked or full.', err);
+  }
+}
+
+function renderPastGames() {
+  const games = mode === 'analysis' ? readPastGames() : [];
+  pastGamesEl.hidden = games.length === 0;
+  pastGamesEl.innerHTML = '';
+  if (games.length === 0) return;
+  const heading = document.createElement('div');
+  heading.classList.add('heading');
+  heading.textContent = 'Past games';
+  pastGamesEl.appendChild(heading);
+  for (const game of games) {
+    const row = document.createElement('button');
+    row.classList.add('game');
+    const result = document.createElement('span');
+    result.classList.add('result', game.result);
+    result.textContent = game.result === 'draw' ? 'Draw' : `${game.result === 'green' ? 'Green' : 'Red'} won`;
+    const plies = parseMoves(game.moves).length;
+    const info = document.createElement('span');
+    info.classList.add('info');
+    const date = new Date(game.date).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    info.textContent = `${Math.ceil(plies / 2)} moves · ${MODE_NAMES[game.mode]} · ${date}`;
+    const text = document.createElement('span');
+    text.append(result, info);
+    row.append(miniBoardOf(game.boards, game.last), text);
+    row.title = game.moves;
+    row.addEventListener('click', () => {
+      if (!isAITurn()) loadMoves(parseMoves(game.moves));
+    });
+    pastGamesEl.appendChild(row);
+  }
 }
 
 // Without the clipboard API, select the list so the user can copy it, or show it in a prompt.
