@@ -210,9 +210,10 @@ function reportSize() {
   });
 }
 
-// --- The capture rule, for the hover preview -------------------------------------
+// --- The rules, for the user's move ---------------------------------------------
 //
-// Only to preview a move; the server plays it with the real engine.
+// To preview a move, and to play the user's move at once instead of after the
+// server's answer; the server still checks it with the real engine.
 
 const indexOf = (name) => (Number(name.slice(1)) - 1) * SIZE + COLUMNS.indexOf(name[0]);
 const nameOf = (i) => COLUMNS[i % SIZE] + (Math.floor(i / SIZE) + 1);
@@ -234,6 +235,19 @@ function capturesOf(owner, index, colour) {
     if (run.length && onBoard(r, c) && owner[r * SIZE + c] === colour) captured.push(...run);
   }
   return captured;
+}
+
+// The corners of a square `colour` owns, as indices, or null.
+function wonSquare(owner, colour) {
+  for (let k = 1; k < SIZE; k++) {
+    for (let r = 0; r + k < SIZE; r++) {
+      for (let c = 0; c + k < SIZE; c++) {
+        const corners = [r * SIZE + c, r * SIZE + c + k, (r + k) * SIZE + c, (r + k) * SIZE + c + k];
+        if (corners.every((i) => owner[i] === colour)) return corners;
+      }
+    }
+  }
+  return null;
 }
 
 // --- The board -----------------------------------------------------------------
@@ -351,11 +365,14 @@ function moveText(moves) {
 }
 
 // Show the position before the last move, then play the last move in, after
-// `delay` ms. Does nothing if the board already shows this many moves.
+// `delay` ms, or with no animation if `delay` is negative. Does nothing if the
+// board already shows this many moves.
 let shownMoves = -1;
+let shownGame = null;
 function showGame(game, delay = 250) {
   if (game.moves.length === shownMoves) return;
   shownMoves = game.moves.length;
+  shownGame = game;
   const user = game.claude === 'green' ? 'red' : 'green';
   gameId = game.game;
   owner = Array(SIZE * SIZE).fill(null);
@@ -363,7 +380,11 @@ function showGame(game, delay = 250) {
   for (const name of game.red) owner[indexOf(name)] = 'B';
   movesEl.textContent = moveText(game.moves);
 
-  if (game.last) {
+  for (const cell of cells) cell.classList.remove('last');
+  if (game.last && delay < 0) {
+    paint();
+    cells[indexOf(game.last)].classList.add('last');
+  } else if (game.last) {
     const last = indexOf(game.last);
     const mover = owner[last];
     const captured = game.captured.map(indexOf);
@@ -411,26 +432,42 @@ async function follow(after) {
   }
 }
 
-// Send the user's move to the server, play it in, then wait for Claude's reply.
+// Play the user's move at once, send it to the server, then wait for Claude's
+// reply. If the server refuses it, put the position back.
 async function onClick(i) {
   if (!userColour || owner[i]) return;
   const colour = userColour;
+  const before = shownGame;
   userColour = null;
   boardEl.classList.remove('open');
   clearPreview();
   errorEl.style.display = 'none';
-  statusEl.textContent = `Playing ${nameOf(i)}…`;
+  const captured = capturesOf(owner, i, colour);
+  const after = owner.slice();
+  after[i] = colour;
+  for (const j of captured) after[j] = null;
+  const corners = wonSquare(after, colour);
+  playOnBoard(i, colour, captured, corners);
+  movesEl.textContent = moveText([...before.moves, nameOf(i)]);
+  statusEl.textContent = corners ? '' : 'Claude is thinking…';
+
   let game;
   try {
     game = await callTool('user_move', { game: gameId, move: nameOf(i) });
   } catch (error) {
-    userColour = colour;
-    boardEl.classList.add('open');
+    for (const cell of cells) cell.classList.remove('capture', 'drop', 'win-pulse', 'winner');
+    boardEl.classList.remove('won');
+    winOutline.hidden = true;
+    shownMoves = -1;
+    showGame(before, -1);
     statusEl.textContent = 'That move was not played.';
     return showError(error.message);
   }
-  showGame(game, 0);
-  follow(game.moves.length);
+  shownMoves = game.moves.length;
+  shownGame = game;
+  if (game.winner) statusEl.innerHTML = `You win as ${player(game.winner)}!`;
+  else if (game.draw) statusEl.textContent = 'Draw: the same position for the third time.';
+  else follow(game.moves.length);
 }
 
 buildBoard();
