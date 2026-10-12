@@ -87,6 +87,9 @@ a { color: $link; }
     a:has(+ a[href$="/docs/"])::before { content: "Previous"; }
     a[href$="/docs/"] ~ a { grid-area: next; text-align: right; }
     a[href$="/docs/"] ~ a::before { content: "Next"; }
+    // Page 0 goes back to the index: the index link comes first, as Previous.
+    a[href$="/docs/"]:first-of-type { grid-area: prev; text-align: left; }
+    a[href$="/docs/"]:first-of-type::before { content: "Previous"; }
     // The index page has only a next link.
     a:only-of-type { grid-area: next; text-align: right; }
     a:only-of-type::before { content: "Next"; }

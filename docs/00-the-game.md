@@ -46,4 +46,4 @@ Only the player who moves captures. Placing a piece between two enemy pieces is 
 
 ---
 
-<sub>[index](README.md) · [1. Bitboards](01-bitboards.md) →</sub>
+<sub>← [index](README.md) · [1. Bitboards](01-bitboards.md) →</sub>
