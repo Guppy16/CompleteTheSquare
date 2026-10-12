@@ -5,59 +5,132 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Complete the Square</title>
 <style>
-  /* The game's palette (square-game/style.css). The text follows the host's theme. */
+  /* The board, its colours and its animations as on the page (square-game/style.css),
+     in a dark card so it looks the same in a light or dark chat. */
   :root {
-    --board: #1e1e1e;
-    --cell: #2a2a2a;
-    --line: #3a3a3a;
+    --bg: #121212;
+    --surface-2: #2a2a2a;
+    --border: #3a3a3a;
+    --text: #e6e6e6;
+    --muted: #8a8a8a;
     --green: #4CAF50;
     --red: #F44336;
     --accent: #ff9900;
-    --text: #1f1f1f;
-    --muted: #6b6b6b;
-    color-scheme: light;
+    --gap: 4px;
+    --motion: 0.75;
+    /* A damped spring (stiffness 170, damping 16) sampled for linear(). */
+    --spring: linear(0, 0.103, 0.326, 0.572, 0.784, 0.938, 1.033, 1.077, 1.087,
+                     1.076, 1.056, 1.034, 1.017, 1.004, 0.996, 0.992, 0.993,
+                     0.995, 0.997, 0.999, 1);
+    color-scheme: dark;
   }
-  :root[data-theme="dark"] { --text: #e6e6e6; --muted: #8a8a8a; color-scheme: dark; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --text: #e6e6e6; --muted: #8a8a8a; color-scheme: dark; }
+  html, body { margin: 0; background: transparent; overflow: hidden; }   /* no scrollbar to change the width */
+  body { font: 14px/1.4 system-ui, sans-serif; color: var(--text); }
+  main { max-width: 360px; margin: 0 auto; padding: 12px 12px 14px; background: var(--bg); border-radius: 14px; }
+
+  #board {
+    display: grid;
+    grid-template-columns: auto repeat(5, minmax(0, 1fr)) auto;
+    gap: var(--gap);
+    position: relative;
   }
-  html, body { margin: 0; background: transparent; }
-  body { font: 14px/1.4 system-ui, sans-serif; color: var(--text); padding: 8px 0; }
-  main { width: min(100%, 340px); margin: 0 auto; }
-  svg { display: block; width: 100%; height: auto; user-select: none; }
-  .label { fill: var(--muted); font-size: 11px; text-anchor: middle; dominant-baseline: central; }
-  .cell { fill: var(--cell); }
-  .cell.open { cursor: pointer; }
-  .cell.open:hover { fill: #333; }
-  .ghost { pointer-events: none; opacity: 0; }
-  .cell.open:hover + .ghost { opacity: 0.4; }
-  .piece { transition: r 0.2s; }
-  .last { fill: none; stroke: #fff; stroke-width: 2.5; }
-  .captured { fill: none; stroke-width: 2; stroke-dasharray: 4 4; opacity: 0.7; }
-  .win { fill: none; stroke: var(--accent); stroke-width: 4; stroke-linejoin: round; }
-  #status { margin: 8px 0 2px; text-align: center; font-weight: 600; }
+  .label {
+    display: flex; align-items: center; justify-content: center;
+    min-width: 1.4em; font-size: 0.8rem; color: var(--muted); user-select: none;
+  }
+  .cell {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform calc(0.45s * var(--motion)) var(--spring);
+  }
+  .cell.player-W { background-color: var(--green); border-color: var(--green); }
+  .cell.player-B { background-color: var(--red); border-color: var(--red); }
+  .cell.last { box-shadow: 0 0 0 2px var(--text); z-index: 1; }
+  #board.open .cell:not(.player-W):not(.player-B) { cursor: pointer; }
+
+  /* A piece just placed lands with a spring. */
+  .cell.drop { animation: drop calc(0.5s * var(--motion)) var(--spring); }
+  @keyframes drop { from { transform: scale(0.5); } }
+
+  /* A captured piece swells in its old colour, then fades to an empty square,
+     rippling out from the move (--step is its distance). */
+  .cell.capture[data-was="W"] { --from: var(--green); }
+  .cell.capture[data-was="B"] { --from: var(--red); }
+  .cell.capture {
+    animation: capture calc(0.3s * var(--motion)) ease-in
+               calc((60ms + 70ms * var(--step, 0)) * var(--motion)) backwards;
+  }
+  @keyframes capture {
+    0%   { background-color: var(--from); border-color: var(--from); }
+    30%  { background-color: var(--from); border-color: var(--from); transform: scale(1.12); }
+  }
+
+  /* Hover: a faint piece springs in, and each piece the move would capture
+     springs down with a dashed outline. */
+  .cell.ghost-W::after, .cell.ghost-B::after {
+    content: ''; position: absolute; inset: 0; opacity: 0.3; pointer-events: none;
+    animation: drop calc(0.5s * var(--motion)) var(--spring);
+  }
+  .cell.ghost-W::after { background: var(--green); }
+  .cell.ghost-B::after { background: var(--red); }
+  .cell.would-capture { transform: scale(0.8); outline: 2px dashed var(--accent); outline-offset: 3px; }
+
+  /* A win: the corners pulse in turn, a frame traces round the square, and
+     the other pieces dim. */
+  .cell.win-pulse {
+    animation: win-pulse calc(0.4s * var(--motion)) ease-out
+               calc(90ms * var(--step, 0) * var(--motion));
+  }
+  @keyframes win-pulse { 40% { transform: scale(1.18); } }
+  .cell.winner { box-shadow: 0 0 10px var(--accent); }
+  #board.won .cell:not(.winner) {
+    opacity: 0.4;
+    transition: opacity calc(0.4s * var(--motion)) calc(360ms * var(--motion));
+  }
+  .win-outline { position: absolute; inset: -5px; pointer-events: none; z-index: 2; }
+  .win-outline[hidden] { display: none; }
+  .win-outline svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  .win-outline rect {
+    fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: square;
+    stroke-dasharray: 100;
+    animation: trace calc(0.6s * var(--motion)) ease-in-out calc(360ms * var(--motion)) backwards;
+  }
+  @keyframes trace { from { stroke-dashoffset: 100; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+
+  #status { margin: 12px 0 2px; text-align: center; font-weight: 600; }
+  .green { color: var(--green); }
+  .red { color: var(--red); }
   #moves { margin: 0; text-align: center; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
-  #error { display: none; margin: 8px 0 0; padding: 6px 8px; border-radius: 6px; background: #5c1f1b; color: #ffd9d6; font-size: 12px; }
+  #error { display: none; margin: 8px 0 0; padding: 6px 8px; border-radius: 6px; background: #5c1f1b; color: #ffd9d6; font-size: 12px; white-space: pre-wrap; }
 </style>
 </head>
 <body>
 <main>
-  <svg id="board" viewBox="0 0 280 280" role="img" aria-label="Board"></svg>
+  <div id="board"></div>
   <p id="status">Loading the game…</p>
   <p id="moves"></p>
   <p id="error"></p>
 </main>
 <script>
 // The view for the `play` tool (worker/mcp.js). The host sends the tool's
-// result once; this draws it. When it is the user's turn, clicking an empty
-// square sends "I play C3." to the chat, and Claude answers with its move.
-// Messages to the host are JSON-RPC over postMessage (the MCP Apps spec).
+// result once; this shows the position before Claude's move, then plays the
+// move in. When it is the user's turn, clicking an empty square plays it here
+// and puts "I play C3." in the chat for the user to send; the server checks
+// it when Claude replies. Messages to the host are JSON-RPC over postMessage
+// (the MCP Apps spec).
 
 const SIZE = 5;
 const COLUMNS = 'ABCDE';
-const CELL = 50;
-const PAD = 20;
-const SVG = 'http://www.w3.org/2000/svg';
+const COLOUR = { green: 'W', red: 'B' };     // the page's class names for the players
+const DIRECTIONS = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
 
 const boardEl = document.getElementById('board');
 const statusEl = document.getElementById('status');
@@ -93,10 +166,9 @@ const handlers = {
       return showError(params.content?.map((c) => c.text).join('\n') ?? 'The tool failed.');
     }
     if (!params.structuredContent) throw new Error('The tool result has no game in it.');
-    draw(params.structuredContent);
+    showGame(params.structuredContent);
   },
   'ui/notifications/tool-cancelled': () => { statusEl.textContent = 'Cancelled.'; },
-  'ui/notifications/host-context-changed': (params) => applyContext(params),
 };
 
 window.addEventListener('message', (event) => {
@@ -116,90 +188,173 @@ window.addEventListener('message', (event) => {
   }
 });
 
-function applyContext(context) {
-  if (context?.theme) document.documentElement.dataset.theme = context.theme;
-}
-
 async function connect() {
-  const result = await request('ui/initialize', {
+  await request('ui/initialize', {
     appInfo: { name: 'Complete the Square', version: '1.0.0' },
     appCapabilities: {},
     protocolVersion: '2026-01-26',
   });
-  applyContext(result?.hostContext);
   send({ method: 'ui/notifications/initialized' });
-  new ResizeObserver(() => {
-    send({ method: 'ui/notifications/size-changed', params: { width: document.body.scrollWidth, height: document.body.scrollHeight } });
-  }).observe(document.body);
+  new ResizeObserver(reportSize).observe(document.body);
 }
 
-// --- The board ---------------------------------------------------------------
-
-function element(name, attributes, parent = boardEl) {
-  const el = document.createElementNS(SVG, name);
-  for (const [key, value] of Object.entries(attributes)) el.setAttribute(key, value);
-  parent.appendChild(el);
-  return el;
+// Tell the host how tall the card is, once a frame and only when it changes:
+// the host resizes the frame to fit, which would otherwise report again.
+let reported = '';
+function reportSize() {
+  requestAnimationFrame(() => {
+    const size = { width: window.innerWidth, height: Math.ceil(document.body.getBoundingClientRect().height) };
+    if (JSON.stringify(size) === reported) return;
+    reported = JSON.stringify(size);
+    send({ method: 'ui/notifications/size-changed', params: size });
+  });
 }
 
-// "C3" -> the centre of its square on the board.
-function centre(name) {
-  const col = COLUMNS.indexOf(name[0]);
-  const row = Number(name.slice(1)) - 1;
-  return [PAD + col * CELL + CELL / 2, PAD + row * CELL + CELL / 2];
-}
+// --- The rules, for the user's move ------------------------------------------
+//
+// Only to show the user's move at once; the server checks it with the real engine.
 
-function draw(game) {
-  boardEl.replaceChildren();
-  const user = game.claude === 'green' ? 'red' : 'green';
-  const owner = {};
-  for (const name of game.green) owner[name] = 'green';
-  for (const name of game.red) owner[name] = 'red';
-  const yourTurn = game.toMove === user;
+const indexOf = (name) => (Number(name.slice(1)) - 1) * SIZE + COLUMNS.indexOf(name[0]);
+const nameOf = (i) => COLUMNS[i % SIZE] + (Math.floor(i / SIZE) + 1);
+const onBoard = (r, c) => r >= 0 && r < SIZE && c >= 0 && c < SIZE;
 
-  for (let i = 0; i < SIZE; i++) {
-    element('text', { class: 'label', x: PAD + i * CELL + CELL / 2, y: PAD / 2 }).textContent = COLUMNS[i];
-    element('text', { class: 'label', x: PAD / 2, y: PAD + i * CELL + CELL / 2 }).textContent = i + 1;
+// Squares a piece of `colour` placed at `index` would capture: each run of
+// opponent pieces that ends at one of the mover's own.
+function capturesOf(owner, index, colour) {
+  const captured = [];
+  for (const [dr, dc] of DIRECTIONS) {
+    const run = [];
+    let r = Math.floor(index / SIZE) + dr;
+    let c = index % SIZE + dc;
+    while (onBoard(r, c) && owner[r * SIZE + c] && owner[r * SIZE + c] !== colour) {
+      run.push(r * SIZE + c);
+      r += dr;
+      c += dc;
+    }
+    if (run.length && onBoard(r, c) && owner[r * SIZE + c] === colour) captured.push(...run);
   }
-  element('rect', { x: PAD - 2, y: PAD - 2, width: SIZE * CELL + 4, height: SIZE * CELL + 4, rx: 8, fill: 'var(--board)' });
+  return captured;
+}
 
-  for (let row = 0; row < SIZE; row++) {
-    for (let col = 0; col < SIZE; col++) {
-      const name = COLUMNS[col] + (row + 1);
-      const [x, y] = centre(name);
-      const open = yourTurn && !owner[name];
-      const cell = element('rect', { class: open ? 'cell open' : 'cell', x: x - CELL / 2 + 2, y: y - CELL / 2 + 2, width: CELL - 4, height: CELL - 4, rx: 6 });
-      if (open) {
-        element('circle', { class: 'ghost', cx: x, cy: y, r: 16, fill: `var(--${user})` });
-        cell.addEventListener('click', () => playMove(name, user));
+// The corners of a square `colour` owns, as indices, or null.
+function wonSquare(owner, colour) {
+  for (let k = 1; k < SIZE; k++) {
+    for (let r = 0; r + k < SIZE; r++) {
+      for (let c = 0; c + k < SIZE; c++) {
+        const corners = [r * SIZE + c, r * SIZE + c + k, (r + k) * SIZE + c, (r + k) * SIZE + c + k];
+        if (corners.every((i) => owner[i] === colour)) return corners;
       }
-      if (owner[name]) element('circle', { class: 'piece', cx: x, cy: y, r: 16, fill: `var(--${owner[name]})` });
     }
   }
-
-  // Pieces the last move removed, as dashed outlines in their colour.
-  const capturedColour = owner[game.last] === 'green' ? 'red' : 'green';
-  for (const name of game.captured) {
-    const [x, y] = centre(name);
-    element('circle', { class: 'captured', cx: x, cy: y, r: 15, stroke: `var(--${capturedColour})` });
-  }
-  if (game.last) {
-    const [x, y] = centre(game.last);
-    element('circle', { class: 'last', cx: x, cy: y, r: 19 });
-  }
-  if (game.winningSquare.length === 4) {
-    const points = game.winningSquare.map(centre);
-    const xs = points.map((p) => p[0]);
-    const ys = points.map((p) => p[1]);
-    const [left, right, top, bottom] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-    element('rect', { class: 'win', x: left, y: top, width: right - left, height: bottom - top, rx: 4 });
-  }
-
-  if (game.winner) statusEl.textContent = game.winner === user ? `You win (${user})!` : `Claude wins (${game.winner}).`;
-  else if (game.draw) statusEl.textContent = 'Draw: the same position for the third time.';
-  else statusEl.textContent = `Your move: you are ${user}. Click a square.`;
-  movesEl.textContent = moveText(game.moves);
+  return null;
 }
+
+// --- The board -----------------------------------------------------------------
+
+const cells = [];
+let owner = Array(SIZE * SIZE).fill(null);   // 'W', 'B' or null per square, as shown
+let userColour = null;                       // 'W' or 'B' while the user may click
+let winOutline;
+
+function buildBoard() {
+  const label = (text) => {
+    const el = document.createElement('div');
+    el.className = 'label';
+    el.textContent = text;
+    boardEl.appendChild(el);
+  };
+  label('');
+  for (const column of COLUMNS) label(column);
+  label('');                                 // right-hand spacer keeps the squares centred
+  for (let r = 0; r < SIZE; r++) {
+    label(String(r + 1));
+    for (let c = 0; c < SIZE; c++) {
+      const i = r * SIZE + c;
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.title = nameOf(i);
+      cell.addEventListener('click', () => onClick(i));
+      cell.addEventListener('pointerenter', (event) => {
+        if (event.pointerType !== 'touch') showPreview(i);
+      });
+      cell.addEventListener('pointerleave', clearPreview);
+      cell.addEventListener('animationend', (event) => {
+        if (event.target === cell) cell.classList.remove('drop', 'capture', 'win-pulse');
+      });
+      boardEl.appendChild(cell);
+      cells.push(cell);
+    }
+    label('');
+  }
+  winOutline = document.createElement('div');
+  winOutline.className = 'win-outline';
+  winOutline.hidden = true;
+  winOutline.innerHTML = '<svg><rect width="100%" height="100%" pathLength="100"/></svg>';
+  boardEl.appendChild(winOutline);
+}
+
+// Restarts the animation if the cell is already running one.
+function animate(cell, name, step = 0) {
+  cell.classList.remove(name);
+  void cell.offsetWidth;                     // forces a style flush so re-adding restarts it
+  cell.style.setProperty('--step', step);
+  cell.classList.add(name);
+}
+
+// Moves a king would need between two squares: the steps along a capture ray.
+const distance = (a, b) => Math.max(Math.abs(Math.floor(a / SIZE) - Math.floor(b / SIZE)), Math.abs(a % SIZE - b % SIZE));
+
+function paint() {
+  cells.forEach((cell, i) => {
+    cell.classList.remove('player-W', 'player-B');
+    if (owner[i]) cell.classList.add(`player-${owner[i]}`);
+  });
+}
+
+// Play `index` for `colour` on the board shown: it drops in, its captures
+// ripple out, and a completed square pulses and is traced.
+function playOnBoard(index, colour, captured, corners) {
+  for (const i of captured) {
+    cells[i].dataset.was = owner[i];
+    owner[i] = null;
+    animate(cells[i], 'capture', distance(index, i) - 1);
+  }
+  owner[index] = colour;
+  paint();
+  for (const cell of cells) cell.classList.remove('last');
+  cells[index].classList.add('last');
+  animate(cells[index], 'drop');
+  if (corners) showWin(corners);
+}
+
+function showWin(corners) {
+  const rows = corners.map((i) => Math.floor(i / SIZE));
+  const cols = corners.map((i) => i % SIZE);
+  const [top, bottom, left, right] = [Math.min(...rows), Math.max(...rows), Math.min(...cols), Math.max(...cols)];
+  // The corners pulse clockwise from the top left.
+  for (const i of corners) {
+    const onRight = i % SIZE === right;
+    const step = Math.floor(i / SIZE) === top ? (onRight ? 1 : 0) : (onRight ? 2 : 3);
+    cells[i].classList.add('winner');
+    animate(cells[i], 'win-pulse', step);
+  }
+  boardEl.classList.add('won');
+  // +2: grid lines are 1-based and the first row and column hold the labels.
+  winOutline.style.gridArea = `${top + 2} / ${left + 2} / ${bottom + 3} / ${right + 3}`;
+  winOutline.hidden = false;
+}
+
+function showPreview(i) {
+  if (!userColour || owner[i]) return;
+  cells[i].classList.add(`ghost-${userColour}`);
+  for (const j of capturesOf(owner, i, userColour)) cells[j].classList.add('would-capture');
+}
+
+function clearPreview() {
+  for (const cell of cells) cell.classList.remove('ghost-W', 'ghost-B', 'would-capture');
+}
+
+const player = (colour) => `<span class="${colour}">${colour === 'green' ? 'Green' : 'Red'}</span>`;
 
 function moveText(moves) {
   const pairs = [];
@@ -207,23 +362,61 @@ function moveText(moves) {
   return pairs.join('  ');
 }
 
-// Send the user's move to Claude, and leave this board as it was played.
-async function playMove(name, user) {
-  for (const cell of boardEl.querySelectorAll('.open')) cell.classList.remove('open');
-  for (const ghost of boardEl.querySelectorAll('.ghost')) ghost.remove();
-  const [x, y] = centre(name);
-  const piece = element('circle', { class: 'piece', cx: x, cy: y, r: 16, fill: `var(--${user})`, opacity: 0.6 });
-  statusEl.textContent = `You played ${name}. Waiting for Claude…`;
+// Show the position before the last move, then play the last move in.
+function showGame(game) {
+  const user = game.claude === 'green' ? 'red' : 'green';
+  owner = Array(SIZE * SIZE).fill(null);
+  for (const name of game.green) owner[indexOf(name)] = 'W';
+  for (const name of game.red) owner[indexOf(name)] = 'B';
+  movesEl.textContent = moveText(game.moves);
+
+  if (game.last) {
+    const last = indexOf(game.last);
+    const mover = owner[last];
+    const captured = game.captured.map(indexOf);
+    owner[last] = null;
+    for (const i of captured) owner[i] = mover === 'W' ? 'B' : 'W';
+    paint();
+    const corners = game.winningSquare.length ? game.winningSquare.map(indexOf) : null;
+    setTimeout(() => playOnBoard(last, mover, captured, corners), 250);
+  } else {
+    paint();
+  }
+
+  if (game.winner) statusEl.innerHTML = game.winner === user ? `You win as ${player(user)}!` : `Claude wins as ${player(game.winner)}.`;
+  else if (game.draw) statusEl.textContent = 'Draw: the same position for the third time.';
+  else {
+    userColour = COLOUR[user];
+    boardEl.classList.add('open');
+    statusEl.innerHTML = `Your move as ${player(user)}: click a square, or type one in the chat.`;
+  }
+}
+
+// Play the user's move here and put it in the chat for them to send.
+async function onClick(i) {
+  if (!userColour || owner[i]) return;
+  const colour = userColour;
+  userColour = null;
+  boardEl.classList.remove('open');
+  clearPreview();
+  const name = nameOf(i);
+  const captured = capturesOf(owner, i, colour);
+  const after = owner.slice();
+  after[i] = colour;
+  for (const j of captured) after[j] = null;
+  playOnBoard(i, colour, captured, wonSquare(after, colour));
+  movesEl.textContent = moveText([...movesEl.textContent.split(/\s+/).filter((t) => t && !t.endsWith('.')), name]);
+  statusEl.textContent = `${name} is in the chat box: send it to play.`;
   try {
     const result = await request('ui/message', { role: 'user', content: [{ type: 'text', text: `I play ${name}.` }] });
     if (result?.isError) throw new Error('The chat did not take the message.');
   } catch (error) {
-    piece.remove();
-    statusEl.textContent = 'Could not send the move. Type it in the chat instead.';
+    statusEl.textContent = `Could not put ${name} in the chat. Type it there instead.`;
     showError(error.message);
   }
 }
 
+buildBoard();
 connect();
 </script>
 </body>
