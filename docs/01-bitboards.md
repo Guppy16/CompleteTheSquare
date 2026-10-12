@@ -80,4 +80,4 @@ second on one core.
 
 ---
 
-<sub>[index](README.md) · [2. Move generation](02-move-generation.md) →</sub>
+<sub>← [0. The game](00-the-game.md) · [index](README.md) · [2. Move generation](02-move-generation.md) →</sub>

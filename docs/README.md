@@ -24,6 +24,7 @@ time; afterwards each one stands alone.
 
 | # | page | one line |
 |---|------|----------|
+| 0 | [The game](00-the-game.md) | the rules, and what each one asks of the engine |
 | 1 | [Bitboards](01-bitboards.md) | a player's pieces as one 25-bit integer |
 | 2 | [Move generation](02-move-generation.md) | legal moves are the set bits of the empty mask |
 | 3 | [Captures and wins](03-captures-and-wins.md) | precomputed rays and corner masks |
