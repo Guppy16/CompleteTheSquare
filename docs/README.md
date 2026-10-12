@@ -76,3 +76,7 @@ starting points:
 - [Horizon effect](https://en.wikipedia.org/wiki/Horizon_effect) and [quiescence search](https://en.wikipedia.org/wiki/Quiescence_search)
 - [Transposition table](https://en.wikipedia.org/wiki/Transposition_table), [killer heuristic](https://en.wikipedia.org/wiki/Killer_heuristic), [iterative deepening](https://en.wikipedia.org/wiki/Iterative_deepening_depth-first_search)
 - The [Chess Programming Wiki](https://www.chessprogramming.org/Main_Page), especially [Lazy SMP](https://www.chessprogramming.org/Lazy_SMP), [contempt](https://www.chessprogramming.org/Contempt_Factor) and the [graph history interaction](https://www.chessprogramming.org/Graph_History_Interaction) problem behind page 9's repetition fix
+
+---
+
+<sub>[0. The game](00-the-game.md) →</sub>

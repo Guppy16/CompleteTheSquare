@@ -87,5 +87,8 @@ a { color: $link; }
     a:has(+ a[href$="/docs/"])::before { content: "Previous"; }
     a[href$="/docs/"] ~ a { grid-area: next; text-align: right; }
     a[href$="/docs/"] ~ a::before { content: "Next"; }
+    // The index page has only a next link.
+    a:only-of-type { grid-area: next; text-align: right; }
+    a:only-of-type::before { content: "Next"; }
   }
 }
