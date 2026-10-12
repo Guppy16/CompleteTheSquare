@@ -34,11 +34,11 @@ const RULES = `Rules of Complete the Square:
 - Win: own all four corners of a square, 2x2 up to 5x5, sides along the rows and columns.
 - Draw: the same position for the third time.`;
 
-const HOW_TO_PLAY = `You play one colour and choose your own moves by thinking about the position; the user plays the other, by clicking the board. Ask which colour they want if they have not said.
+const HOW_TO_PLAY = `You play one colour and choose your own moves; the user plays the other, by clicking the board. Ask which colour they want if they have not said.
 
-Keep the game going within your turn: after each of your moves, call wait_for_move, and call it again whenever it says the user has not moved yet. Never ask the user to send a message to continue.
+Think each move through before you play it: what it captures, which squares it brings you closer to completing, and what the user could capture or complete in reply.
 
-Play like an opponent across the board: say your move in a sentence, without analysing the position for the user, pointing out their threats or good moves, or explaining your plans. When the game ends, say who won.`;
+Keep the game going within your turn: after each of your moves, call wait_for_move, and call it again whenever it says the user has not moved yet. Never ask the user to send a message to continue. When the game ends, say who won.`;
 
 const GAME_ID = { type: 'string', description: 'The game id from new_game.' };
 const SQUARE = { type: 'string', description: 'A square: a column A-E and a row 1-5, like C3.' };
@@ -94,7 +94,13 @@ const BOARD_RESOURCE = {
 
 // The game as text for Claude, ending with what to do next.
 function describe(game, gameId, next) {
-  const lines = [game.board, '', `Moves: ${game.moveText || '(none yet)'}`];
+  const lines = [
+    game.board,
+    '',
+    `Green: ${game.green.join(' ') || '(none)'}`,
+    `Red: ${game.red.join(' ') || '(none)'}`,
+    `Moves: ${game.moveText || '(none yet)'}`,
+  ];
   if (game.captured.length) lines.push(`The last move captured ${game.captured.join(' ')}.`);
   if (game.winner) lines.push(`Game over: ${game.winner === game.claude ? 'you' : 'the user'} (${game.winner}) won with ${game.winningSquare.join(' ')}.`);
   else if (game.draw) lines.push('Game over: a draw, the same position for the third time.');
