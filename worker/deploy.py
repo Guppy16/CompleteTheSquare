@@ -19,6 +19,9 @@ HERE = Path(__file__).parent
 # The rate limiter's period is 10 or 60 seconds: two a minute is about one per 30 s.
 RATE_LIMIT = {"limit": 2, "period": 60}
 
+# Creates the Game class (worker/game.js), one Durable Object per game against Claude.
+MIGRATION = {"new_tag": "v1", "new_sqlite_classes": ["Game"]}
+
 
 def call(method: str, path: str, **kwargs) -> dict | list:
     """Call the Cloudflare API and return its result; raise on an error reply."""
@@ -37,6 +40,12 @@ def database_id(account: str) -> str:
     return created["uuid"]
 
 
+def migration_tag(account: str) -> str | None:
+    """The tag of the last Durable Object migration applied to the Worker."""
+    scripts = call("GET", f"/accounts/{account}/workers/scripts")
+    return next((s.get("migration_tag") for s in scripts if s["id"] == NAME), None)
+
+
 def upload_worker(account: str, database: str) -> None:
     metadata = {
         "main_module": "index.js",
@@ -49,11 +58,18 @@ def upload_worker(account: str, database: str) -> None:
                 "namespace_id": "1001",
                 "simple": RATE_LIMIT,
             },
+            {"type": "durable_object_namespace", "name": "GAMES", "class_name": "Game"},
         ],
     }
+    # Durable Object classes are created by a migration, applied once.
+    tag = migration_tag(account)
+    if tag != MIGRATION["new_tag"]:
+        metadata["migrations"] = {"old_tag": tag, **MIGRATION} if tag else MIGRATION
     modules = {
         "index.js": (HERE / "index.js", "application/javascript+module"),
         "mcp.js": (HERE / "mcp.js", "application/javascript+module"),
+        "game.js": (HERE / "game.js", "application/javascript+module"),
+        "rules.js": (HERE / "rules.js", "application/javascript+module"),
         "board.html": (HERE / "board.html", "text/plain"),
         "ai.wasm": (HERE.parent / "square-game" / "ai.wasm", "application/wasm"),
     }

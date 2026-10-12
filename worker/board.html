@@ -120,12 +120,11 @@
   <p id="error"></p>
 </main>
 <script>
-// The view for the `play` tool (worker/mcp.js). The host sends the tool's
-// result once; this shows the position before Claude's move, then plays the
-// move in. When it is the user's turn, clicking an empty square plays it here
-// and puts "I play C3." in the chat for the user to send; the server checks
-// it when Claude replies. Messages to the host are JSON-RPC over postMessage
-// (the MCP Apps spec).
+// The view for the new_game and play tools (worker/mcp.js). The host sends the
+// tool's result once; this shows the position before Claude's move, then plays
+// the move in. When it is the user's turn, a click sends the move to the server
+// (the user_move tool), which hands it to Claude's waiting wait_for_move.
+// Messages to the host are JSON-RPC over postMessage (the MCP Apps spec).
 
 const SIZE = 5;
 const COLUMNS = 'ABCDE';
@@ -210,9 +209,9 @@ function reportSize() {
   });
 }
 
-// --- The rules, for the user's move ------------------------------------------
+// --- The capture rule, for the hover preview -------------------------------------
 //
-// Only to show the user's move at once; the server checks it with the real engine.
+// Only to preview a move; the server plays it with the real engine.
 
 const indexOf = (name) => (Number(name.slice(1)) - 1) * SIZE + COLUMNS.indexOf(name[0]);
 const nameOf = (i) => COLUMNS[i % SIZE] + (Math.floor(i / SIZE) + 1);
@@ -236,24 +235,12 @@ function capturesOf(owner, index, colour) {
   return captured;
 }
 
-// The corners of a square `colour` owns, as indices, or null.
-function wonSquare(owner, colour) {
-  for (let k = 1; k < SIZE; k++) {
-    for (let r = 0; r + k < SIZE; r++) {
-      for (let c = 0; c + k < SIZE; c++) {
-        const corners = [r * SIZE + c, r * SIZE + c + k, (r + k) * SIZE + c, (r + k) * SIZE + c + k];
-        if (corners.every((i) => owner[i] === colour)) return corners;
-      }
-    }
-  }
-  return null;
-}
-
 // --- The board -----------------------------------------------------------------
 
 const cells = [];
 let owner = Array(SIZE * SIZE).fill(null);   // 'W', 'B' or null per square, as shown
 let userColour = null;                       // 'W' or 'B' while the user may click
+let gameId = null;
 let winOutline;
 
 function buildBoard() {
@@ -365,6 +352,7 @@ function moveText(moves) {
 // Show the position before the last move, then play the last move in.
 function showGame(game) {
   const user = game.claude === 'green' ? 'red' : 'green';
+  gameId = game.game;
   owner = Array(SIZE * SIZE).fill(null);
   for (const name of game.green) owner[indexOf(name)] = 'W';
   for (const name of game.red) owner[indexOf(name)] = 'B';
@@ -388,30 +376,33 @@ function showGame(game) {
   else {
     userColour = COLOUR[user];
     boardEl.classList.add('open');
-    statusEl.innerHTML = `Your move as ${player(user)}: click a square, or type one in the chat.`;
+    statusEl.innerHTML = `Your move as ${player(user)}: click a square.`;
   }
 }
 
-// Play the user's move here and put it in the chat for them to send.
+// Send the user's move to the server, then play in what the server says happened.
 async function onClick(i) {
   if (!userColour || owner[i]) return;
   const colour = userColour;
   userColour = null;
   boardEl.classList.remove('open');
   clearPreview();
-  const name = nameOf(i);
-  const captured = capturesOf(owner, i, colour);
-  const after = owner.slice();
-  after[i] = colour;
-  for (const j of captured) after[j] = null;
-  playOnBoard(i, colour, captured, wonSquare(after, colour));
-  movesEl.textContent = moveText([...movesEl.textContent.split(/\s+/).filter((t) => t && !t.endsWith('.')), name]);
-  statusEl.textContent = `${name} is in the chat box: send it to play.`;
+  errorEl.style.display = 'none';
+  statusEl.textContent = `Playing ${nameOf(i)}…`;
   try {
-    const result = await request('ui/message', { role: 'user', content: [{ type: 'text', text: `I play ${name}.` }] });
-    if (result?.isError) throw new Error('The chat did not take the message.');
+    const result = await request('tools/call', { name: 'user_move', arguments: { game: gameId, move: nameOf(i) } });
+    if (result?.isError) throw new Error(result.content?.map((c) => c.text).join('\n') ?? 'The move was not played.');
+    const game = result.structuredContent;
+    const corners = game.winningSquare.length ? game.winningSquare.map(indexOf) : null;
+    playOnBoard(i, colour, game.captured.map(indexOf), corners);
+    movesEl.textContent = moveText(game.moves);
+    if (game.winner) statusEl.innerHTML = `You win as ${player(game.winner)}!`;
+    else if (game.draw) statusEl.textContent = 'Draw: the same position for the third time.';
+    else statusEl.textContent = 'Claude is thinking…';
   } catch (error) {
-    statusEl.textContent = `Could not put ${name} in the chat. Type it there instead.`;
+    userColour = colour;
+    boardEl.classList.add('open');
+    statusEl.textContent = 'That move was not played.';
     showError(error.message);
   }
 }

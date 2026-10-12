@@ -2,21 +2,29 @@
 //
 //   POST /mcp  one JSON-RPC message per request, answered as JSON (no sessions, no SSE)
 //
-// Claude picks its own moves; this server only knows the rules. The one tool,
-// `play`, takes the whole game so far, checks every move with the same
-// ai.wasm the page uses, and returns the position. Its result is drawn by
-// board.html (an MCP App), which hosts show in the chat. Clicking a square
-// there sends the user's move to Claude as a chat message.
+// Claude picks its own moves; the server keeps each game (a Game Durable
+// Object, game.js) and checks every move. A whole game is one turn of Claude's:
+//
+//   new_game -> play (Claude's move) -> wait_for_move (until the user clicks) -> play -> ...
+//
+// new_game's and play's results are drawn by board.html (an MCP App) in the
+// chat. A click there calls user_move, which wakes the waiting wait_for_move,
+// so the user never has to send a message.
 
-import wasm from './ai.wasm';
 import boardHtml from './board.html';
+import { PLAYERS, other, parseSquare } from './rules.js';
 
-const engine = new WebAssembly.Instance(wasm, {}).exports;
+// Hosts cache a view by its address, so the address carries a hash of the
+// HTML: a changed board gets a new address (once the host reloads the tool list).
+const BOARD_URI = `ui://complete-the-square/board-${hash(boardHtml)}.html`;
+const OLD_BOARDS = 'ui://complete-the-square/board';
+// FNV-1a: a short hash of a string, as 8 hex digits.
+function hash(text) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
 
-const SIZE = 5;
-const COLUMNS = 'ABCDE';
-const PLAYERS = ['green', 'red'];
-const BOARD_URI = 'ui://complete-the-square/board.html';
 const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 
 const RULES = `Rules of Complete the Square:
@@ -25,27 +33,49 @@ const RULES = `Rules of Complete the Square:
 - Win: own all four corners of a square, 2x2 up to 5x5, sides along the rows and columns.
 - Draw: the same position for the third time.`;
 
-const PLAY_TOOL = {
-  name: 'play',
-  title: 'Play Complete the Square',
-  description: `Play a game of Complete the Square against the user, and show the board.
+const HOW_TO_PLAY = `You play one colour and choose your own moves by thinking about the position; the user plays the other, by clicking the board. Ask which colour they want if they have not said.
 
-You play one colour and choose your own moves by thinking about the position; the user plays the other colour, by clicking the board or naming a square. Ask the user which colour they want if they have not said.
+Keep the game going within your turn: after each of your moves, call wait_for_move, and call it again whenever it says the user has not moved yet. Never ask the user to send a message to continue.
 
-Call this tool to start a game and after every move the user makes: pass the whole game so far, with the user's move and then your reply appended. To start, pass no moves if the user is Green, or your first move if you are Green. The server checks every move: an illegal move returns an error, and the call must leave the user to move (or end the game). Once the game is over, say who won.
+Play like an opponent across the board: say your move in a sentence, without analysing the position for the user, pointing out their threats or good moves, or explaining your plans. When the game ends, say who won.`;
 
-${RULES}`,
-  inputSchema: {
-    type: 'object',
-    properties: {
-      moves: { type: 'string', description: 'The game so far, in order, e.g. "1. C3 A1  2. B2 D4" or "C3 A1 B2 D4". Empty for a new game.' },
-      claude: { type: 'string', enum: PLAYERS, description: 'The colour you (Claude) play.' },
+const GAME_ID = { type: 'string', description: 'The game id from new_game.' };
+const SQUARE = { type: 'string', description: 'A square: a column A-E and a row 1-5, like C3.' };
+
+const TOOLS = [
+  {
+    name: 'new_game',
+    title: 'New game of Complete the Square',
+    description: `Start a game of Complete the Square against the user, and show the board.\n\n${HOW_TO_PLAY}\n\n${RULES}`,
+    inputSchema: {
+      type: 'object',
+      properties: { claude: { type: 'string', enum: PLAYERS, description: 'The colour you (Claude) play. Green moves first.' } },
+      required: ['claude'],
     },
-    required: ['moves', 'claude'],
+    _meta: { ui: { resourceUri: BOARD_URI } },
   },
-  annotations: { readOnlyHint: true, openWorldHint: false },
-  _meta: { ui: { resourceUri: BOARD_URI } },
-};
+  {
+    name: 'play',
+    title: 'Play a move',
+    description: 'Play your move in a game, and show the board. Then call wait_for_move.',
+    inputSchema: { type: 'object', properties: { game: GAME_ID, move: SQUARE }, required: ['game', 'move'] },
+    _meta: { ui: { resourceUri: BOARD_URI } },
+  },
+  {
+    name: 'wait_for_move',
+    title: "Wait for the user's move",
+    description: "Wait for the user to play on the board, up to about 45 seconds. Returns their move and the position, or says they have not moved yet: then call it again.",
+    inputSchema: { type: 'object', properties: { game: GAME_ID }, required: ['game'] },
+    annotations: { readOnlyHint: true },
+  },
+  {
+    name: 'user_move',
+    title: "Play the user's move",
+    description: "Play the user's move. The board calls this when the user clicks; call it yourself only when the user names their move in the chat instead. Never choose a move for the user.",
+    inputSchema: { type: 'object', properties: { game: GAME_ID, move: SQUARE }, required: ['game', 'move'] },
+    _meta: { ui: { visibility: ['model', 'app'] } },
+  },
+];
 
 const BOARD_RESOURCE = {
   uri: BOARD_URI,
@@ -54,134 +84,90 @@ const BOARD_RESOURCE = {
   _meta: { ui: { prefersBorder: false } },
 };
 
-function squareName(index) {
-  return COLUMNS[index % SIZE] + (Math.floor(index / SIZE) + 1);
+// The game as text for Claude, ending with what to do next.
+function describe(game, gameId, next) {
+  const lines = [game.board, '', `Moves: ${game.moveText || '(none yet)'}`];
+  if (game.captured.length) lines.push(`The last move captured ${game.captured.join(' ')}.`);
+  if (game.winner) lines.push(`Game over: ${game.winner === game.claude ? 'you' : 'the user'} (${game.winner}) won with ${game.winningSquare.join(' ')}.`);
+  else if (game.draw) lines.push('Game over: a draw, the same position for the third time.');
+  else lines.push(next);
+  lines.push(`Game id: ${gameId}`);
+  return lines.join('\n');
 }
 
-function squaresOf(mask) {
-  const names = [];
-  for (let i = 0; i < SIZE * SIZE; i++) if (mask & (1 << i)) names.push(squareName(i));
-  return names;
+function nextStep(game) {
+  return game.toMove === game.claude ? `Your move (${game.claude}): call play.` : `The user (${other(game.claude)}) to move: call wait_for_move.`;
 }
 
-// "1. C3 A1  2. B2" or "C3, A1, B2" -> square indices; throws on anything else.
-function parseMoves(text) {
-  const squares = [];
-  for (const token of text.trim().split(/[\s,]+/)) {
-    if (token === '' || /^\d+\.$/.test(token)) continue;
-    const match = /^([A-Ea-e])([1-5])$/.exec(token);
-    if (!match) throw new Error(`"${token}" is not a square: use a column A-E and a row 1-5, like C3.`);
-    squares.push((Number(match[2]) - 1) * SIZE + COLUMNS.indexOf(match[1].toUpperCase()));
+async function callTool(name, args, env) {
+  if (name === 'new_game') {
+    if (!PLAYERS.includes(args?.claude)) throw new Error('Pass "claude": "green" or "red".');
+    const id = env.GAMES.newUniqueId();
+    const game = await env.GAMES.get(id).start(args.claude);
+    return result(game, id.toString(), nextStep(game));
   }
-  if (squares.length > 500) throw new Error('That game is too long.');
-  return squares;
-}
-
-function moveText(squares) {
-  const pairs = [];
-  for (let i = 0; i < squares.length; i += 2) {
-    pairs.push(`${i / 2 + 1}. ${squares.slice(i, i + 2).map(squareName).join(' ')}`);
-  }
-  return pairs.join('  ');
-}
-
-function asciiBoard(green, red) {
-  const rows = [`   ${COLUMNS.split('').join(' ')}`];
-  for (let row = 0; row < SIZE; row++) {
-    const cells = [];
-    for (let col = 0; col < SIZE; col++) {
-      const bit = 1 << (row * SIZE + col);
-      cells.push(green & bit ? 'G' : red & bit ? 'R' : '.');
-    }
-    rows.push(`${row + 1}  ${cells.join(' ')}`);
-  }
-  return rows.join('\n');
-}
-
-// Replay the game with the rules engine; returns the position, for the board
-// view and as text for Claude, or throws with a message Claude can act on.
-function replay(squares, claude) {
-  engine.reset();
-  for (const [i, square] of squares.entries()) {
-    const over = engine.winner() >= 0 || engine.draw();
-    if (!engine.play(Math.floor(square / SIZE), square % SIZE)) {
-      const why = over ? 'the game was already over' : 'that square is occupied';
-      throw new Error(`Move ${i + 1} (${squareName(square)}) is illegal: ${why}. The position before it:\n${asciiBoard(engine.board(0), engine.board(1))}`);
-    }
-  }
-  const ply = engine.move_count();
-  const green = engine.board(0);
-  const red = engine.board(1);
-  const mover = ply % 2 === 1 ? 0 : 1; // who played the last move
-  const captured = ply ? engine.board_at(ply - 1, 1 - mover) & ~engine.board(1 - mover) : 0;
-  const winner = engine.winner();
-  const draw = engine.draw() === 1;
-  const toMove = winner >= 0 || draw ? null : PLAYERS[engine.current_player()];
-  if (toMove === claude) {
-    throw new Error(`It is your move (${claude}): append your reply to the game and call play again.\n${asciiBoard(green, red)}`);
-  }
-  const game = {
-    moves: squares.map(squareName),
-    green: squaresOf(green),
-    red: squaresOf(red),
-    last: ply ? squareName(squares[ply - 1]) : null,
-    captured: squaresOf(captured),
-    toMove,
-    winner: winner >= 0 ? PLAYERS[winner] : null,
-    winningSquare: squaresOf(engine.winning_mask()),
-    draw,
-    claude,
-  };
-  return { game, text: describe(game, asciiBoard(green, red), moveText(squares)) };
-}
-
-function describe(game, board, moves) {
-  let status;
-  if (game.winner) status = `${game.winner === game.claude ? 'Claude' : 'The user'} (${game.winner}) wins: ${game.winningSquare.join(' ')}.`;
-  else if (game.draw) status = 'Draw: the same position for the third time.';
-  else status = `The user (${game.toMove}) to move.`;
-  const captured = game.captured.length ? `\nThe last move captured ${game.captured.join(' ')}.` : '';
-  return `${board}\n\nMoves: ${moves || '(none yet)'}${captured}\n${status}`;
-}
-
-function callTool(name, args) {
-  if (name !== 'play') throw rpcError(-32602, `Unknown tool: ${name}`);
-  if (typeof args?.moves !== 'string' || !PLAYERS.includes(args?.claude)) {
-    return { content: [{ type: 'text', text: 'Pass "moves" (a string) and "claude" ("green" or "red").' }], isError: true };
-  }
+  const gameId = String(args?.game ?? '');
+  let stub;
   try {
-    const { game, text } = replay(parseMoves(args.moves), args.claude);
-    return { content: [{ type: 'text', text }], structuredContent: game };
-  } catch (error) {
-    return { content: [{ type: 'text', text: error.message }], isError: true };
+    stub = env.GAMES.get(env.GAMES.idFromString(gameId));
+  } catch {
+    throw new Error(`"${gameId}" is not a game id: start a game with new_game.`);
   }
+  if (name === 'play') {
+    const game = await stub.move('claude', parseSquare(args.move));
+    return result(game, gameId, nextStep(game));
+  }
+  if (name === 'user_move') {
+    const game = await stub.move('user', parseSquare(args.move));
+    return result(game, gameId, nextStep(game));
+  }
+  if (name === 'wait_for_move') {
+    const game = await stub.waitForUser();
+    const next = game.toMove === game.claude
+      ? `The user played ${game.last}. Your move (${game.claude}): call play.`
+      : 'The user has not moved yet: call wait_for_move again.';
+    return result(game, gameId, next);
+  }
+  throw rpcError(-32602, `Unknown tool: ${name}`);
+}
+
+function result(game, gameId, next) {
+  const { board, moveText, ...shown } = game;
+  return { content: [{ type: 'text', text: describe(game, gameId, next) }], structuredContent: { ...shown, game: gameId } };
 }
 
 function rpcError(code, message) {
   return Object.assign(new Error(message), { code });
 }
 
-function handle(message) {
+async function handle(message, env) {
   const params = message.params ?? {};
   switch (message.method) {
     case 'initialize':
       return {
         protocolVersion: PROTOCOL_VERSIONS.includes(params.protocolVersion) ? params.protocolVersion : PROTOCOL_VERSIONS[1],
         capabilities: { tools: {}, resources: {} },
-        serverInfo: { name: 'complete-the-square', title: 'Complete the Square', version: '1.0.0' },
-        instructions: 'Play Complete the Square, a 5x5 board game, against the user: call the play tool to start a game and after each of their moves.',
+        serverInfo: { name: 'complete-the-square', title: 'Complete the Square', version: '2.0.0' },
+        instructions: `Play Complete the Square, a 5x5 board game, against the user: start with new_game.\n\n${HOW_TO_PLAY}`,
       };
     case 'ping':
       return {};
     case 'tools/list':
-      return { tools: [PLAY_TOOL] };
+      return { tools: TOOLS };
     case 'tools/call':
-      return callTool(params.name, params.arguments);
+      // A rule broken, or a game that does not exist, is a tool error that Claude can act on.
+      try {
+        return await callTool(params.name, params.arguments, env);
+      } catch (error) {
+        if (error.code !== undefined) throw error;
+        return { content: [{ type: 'text', text: error.message }], isError: true };
+      }
     case 'resources/list':
       return { resources: [BOARD_RESOURCE] };
     case 'resources/read':
-      if (params.uri !== BOARD_URI) throw rpcError(-32002, `Unknown resource: ${params.uri}`);
-      return { contents: [{ ...BOARD_RESOURCE, text: boardHtml }] };
+      // An older board's address gets the current board.
+      if (!String(params.uri).startsWith(OLD_BOARDS)) throw rpcError(-32002, `Unknown resource: ${params.uri}`);
+      return { contents: [{ ...BOARD_RESOURCE, uri: params.uri, text: boardHtml }] };
     default:
       throw rpcError(-32601, `Unknown method: ${message.method}`);
   }
@@ -197,7 +183,7 @@ function json(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...HEADERS, 'Content-Type': 'application/json' } });
 }
 
-export async function handleMcp(request) {
+export async function handleMcp(request, env) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: HEADERS });
   if (request.method !== 'POST') return new Response('POST JSON-RPC messages here.', { status: 405, headers: { ...HEADERS, Allow: 'POST' } });
 
@@ -214,7 +200,7 @@ export async function handleMcp(request) {
   if (message.id === undefined || message.method === undefined) return new Response(null, { status: 202, headers: HEADERS });
 
   try {
-    return json({ jsonrpc: '2.0', id: message.id, result: handle(message) });
+    return json({ jsonrpc: '2.0', id: message.id, result: await handle(message, env) });
   } catch (error) {
     if (error.code === undefined) throw error;
     return json({ jsonrpc: '2.0', id: message.id, error: { code: error.code, message: error.message } });
