@@ -13,6 +13,7 @@
 // Claude's moves through game_state, a tool only the board sees.
 
 import boardHtml from './board.html';
+import { IDLE_MS } from './game.js';
 import { PLAYERS, other, parseMoves, parseSquare } from './rules.js';
 
 // Hosts cache a view by its address, so the address carries a hash of the
@@ -38,7 +39,7 @@ const HOW_TO_PLAY = `You play one colour and choose your own moves; the user pla
 
 Think each move through before you play it: what it captures, which squares it brings you closer to completing, and what the user could capture or complete in reply.
 
-Keep the game going within your turn: after each of your moves, call wait_for_move, and call it again whenever it says the user has not moved yet. Never ask the user to send a message to continue. When the game ends, say who won.
+Keep the game going within your turn: after each of your moves, call wait_for_move, and call it again whenever it says the user has not moved yet. Never ask the user to send a message to continue, unless wait_for_move tells you to stop waiting. If the user sends a message during a game, call wait_for_move to see where the game stands. When the game ends, say who won.
 
 The user can also take moves back, put them back and load a game on the board, so always go by the position the tools return, not by your memory of the game.`;
 
@@ -66,7 +67,7 @@ const TOOLS = [
   {
     name: 'wait_for_move',
     title: "Wait for the user's move",
-    description: "Wait for the user to play on the board, up to about 45 seconds. Returns their move and the position, or says they have not moved yet: then call it again.",
+    description: "Wait for the user to play on the board, up to a few minutes. Returns their move and the position, or says they have not moved yet: then call it again.",
     inputSchema: { type: 'object', properties: { game: GAME_ID }, required: ['game'] },
     annotations: { readOnlyHint: true },
   },
@@ -111,7 +112,7 @@ const TOOLS = [
   {
     name: 'game_state',
     title: 'Game state',
-    description: 'For the board: the game once it has more than `after` moves (or has ended), waiting up to about 45 seconds; at once without `after`.',
+    description: 'For the board: the game once it has more than `after` moves (or has ended), waiting up to a few minutes; at once without `after`.',
     inputSchema: { type: 'object', properties: { game: GAME_ID, after: { type: 'integer', minimum: 0 } }, required: ['game'] },
     annotations: { readOnlyHint: true },
     _meta: { ui: { visibility: ['app'] } },
@@ -182,11 +183,14 @@ async function callTool(name, args, env) {
     return result(game, gameId, nextStep(game));
   }
   if (name === 'wait_for_move') {
-    const game = await stub.waitForUser();
-    const next = game.toMove === game.claude
-      ? `The last move was ${game.last ?? '(none)'}. Your move (${game.claude}): call play.`
-      : 'The user has not moved yet: call wait_for_move again.';
-    return result(game, gameId, next);
+    const { idleMs, ...game } = await stub.waitForUser();
+    if (game.toMove === other(game.claude)) {
+      const text = idleMs < IDLE_MS
+        ? 'The user has not moved yet: call wait_for_move again.'
+        : `The user has not moved for ${Math.round(idleMs / 60_000)} minutes: stop waiting and end your turn. Their move will reach you when they next send a message.`;
+      return { content: [{ type: 'text', text }] };
+    }
+    return result(game, gameId, `The last move was ${game.last ?? '(none)'}. Your move (${game.claude}): call play.`);
   }
   throw rpcError(-32602, `Unknown tool: ${name}`);
 }

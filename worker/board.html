@@ -550,14 +550,14 @@ async function callTool(name, args) {
 
 // Keep the board up to date: show the game as it is now (the chat may have
 // been reloaded since this board was made), then, while it is Claude's move,
-// wait on the server for it. Each wait lasts up to 45 s; after ten, give up.
+// wait on the server for it. Each wait lasts up to 4 minutes; after five, give up.
 async function follow(after) {
   try {
     let game = await callTool('game_state', { game: gameId, after });
     for (let tries = 0; ; tries++) {
       showGame(game);
       if (game.toMove !== game.claude) return;
-      if (tries === 10) {
+      if (tries === 5) {
         statusEl.textContent = 'Claude has not moved for a while: ask it to carry on in the chat.';
         return;
       }
@@ -601,6 +601,9 @@ async function onClick(i) {
   shownKey = game.moves.join(' ');
   shownGame = game;
   updateControls(game);
+  if (!game.claudeWaiting && game.toMove === game.claude) {
+    statusEl.textContent = 'Claude has stopped waiting: send it a message, like "your move", to carry on.';
+  }
   if (game.winner) statusEl.innerHTML = `You win as ${player(game.winner)}!`;
   else if (game.draw) statusEl.textContent = 'Draw: the same position for the third time.';
   else follow(game.moves.length);

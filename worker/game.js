@@ -8,14 +8,20 @@
 import { DurableObject } from 'cloudflare:workers';
 import { other, position } from './rules.js';
 
-// How long a call waits for a move before it returns and is made again.
-const WAIT_MS = 45_000;
+// How long a call waits for a move before it returns and is made again: under
+// the few minutes a host gives a tool call.
+const WAIT_MS = 4 * 60_000;
+
+// How long Claude waits for the user in all before it ends its turn.
+export const IDLE_MS = 20 * 60_000;
 
 export class Game extends DurableObject {
   waiting = [];                              // resolves for the calls waiting for a change
+  claudeWaiting = 0;                         // how many of them are Claude's wait_for_move
+  lastWaitEnded = 0;                         // when one last returned: Claude calls again in a moment
 
   async start(claude) {
-    await this.ctx.storage.put({ claude, moves: [], redo: [], id: crypto.randomUUID() });
+    await this.ctx.storage.put({ claude, moves: [], redo: [], id: crypto.randomUUID(), changedAt: Date.now() });
     return this.view();
   }
 
@@ -70,19 +76,28 @@ export class Game extends DurableObject {
   // Check and store the moves and the redo stack, and wake every waiting call.
   async save(moves, redo) {
     const claude = await this.ctx.storage.get('claude');
-    const game = { ...position(moves), claude, canRedo: redo.length > 0 };
-    await this.ctx.storage.put({ moves, redo });
+    // claudeWaiting tells the board whether a move will reach Claude now, or
+    // only once the user sends it a message.
+    const claudeWaiting = this.claudeWaiting > 0 || Date.now() - this.lastWaitEnded < 30_000;
+    const game = { ...position(moves), claude, canRedo: redo.length > 0, claudeWaiting };
+    await this.ctx.storage.put({ moves, redo, changedAt: Date.now() });
     for (const wake of this.waiting.splice(0)) wake();
     if (game.toMove === null) await this.record(game);
     return game;
   }
 
-  // The game once the user has moved (or it has ended), or as it stands after WAIT_MS.
+  // The game once the user has moved (or it has ended), or as it stands after
+  // WAIT_MS, with how long it has gone unchanged.
   async waitForUser() {
-    const game = await this.view();
-    if (game.toMove !== other(game.claude)) return game;
-    await this.change();
-    return this.view();
+    let game = await this.view();
+    if (game.toMove === other(game.claude)) {
+      this.claudeWaiting++;
+      await this.change();
+      this.claudeWaiting--;
+      this.lastWaitEnded = Date.now();
+      game = await this.view();
+    }
+    return { ...game, idleMs: Date.now() - (await this.ctx.storage.get('changedAt')) };
   }
 
   // The game once it has more than `after` moves (or has ended), or as it
