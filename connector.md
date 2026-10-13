@@ -4,6 +4,9 @@ The Complete the Square connector lets you play the game against Claude, on a bo
 chat. Claude chooses its own moves, and the server checks every move against the rules. It
 needs no account and no sign-in.
 
+You can also [play on the website](https://guppy16.github.io/CompleteTheSquare/), against
+its engine or a friend, and read [how the engine works](https://guppy16.github.io/CompleteTheSquare/docs/).
+
 ## Set it up
 
 1. In Claude, open **Settings → Connectors** and choose **Add custom connector**.
