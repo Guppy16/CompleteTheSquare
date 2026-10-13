@@ -30,7 +30,7 @@ function withResignation(game, resigned) {
 export class Game extends DurableObject {
   waiting = [];                              // resolves for the calls waiting for a change
   claudeWaiting = 0;                         // how many of them are Claude's wait_for_move
-  lastWaitEnded = 0;                         // when one last returned: Claude calls again in a moment
+  claudeSeen = 0;                            // when Claude last started a game, moved or stopped waiting
   calls = [];                                // when the calls of the last minute came
 
   // Refuse a call beyond CALLS_PER_MINUTE: every call comes from the host's
@@ -47,6 +47,7 @@ export class Game extends DurableObject {
     this.limit();
     position(squares);                         // throws before anything is stored
     await this.ctx.storage.put({ claude, id: crypto.randomUUID() });
+    this.claudeSeen = Date.now();
     return this.save(squares, []);
   }
 
@@ -83,6 +84,7 @@ export class Game extends DurableObject {
     if (before.toMove !== side) {
       throw new Error(by === 'claude' ? "It is the user's move: call wait_for_move." : "It is Claude's move.");
     }
+    if (by === 'claude') this.claudeSeen = Date.now();
     return this.save([...(await this.ctx.storage.get('moves')), square], []);
   }
 
@@ -126,8 +128,10 @@ export class Game extends DurableObject {
   async save(moves, redo) {
     const claude = await this.ctx.storage.get('claude');
     // claudeWaiting tells the board whether a move will reach Claude now, or
-    // only once the user sends it a message.
-    const claudeWaiting = this.claudeWaiting > 0 || Date.now() - this.lastWaitEnded < 30_000;
+    // only once the user sends it a message. Claude calls wait_for_move a
+    // little after it starts a game, moves, or a wait returns: a move made in
+    // between still reaches it.
+    const claudeWaiting = this.claudeWaiting > 0 || Date.now() - this.claudeSeen < 60_000;
     const game = withResignation({ ...position(moves), claude, canRedo: redo.length > 0, claudeWaiting }, false);
     await this.ctx.storage.put({ moves, redo, changedAt: Date.now() });
     await this.ctx.storage.setAlarm(Date.now() + KEEP_MS);
@@ -145,7 +149,7 @@ export class Game extends DurableObject {
       this.claudeWaiting++;
       await this.wait();
       this.claudeWaiting--;
-      this.lastWaitEnded = Date.now();
+      this.claudeSeen = Date.now();
       game = await this.view();
     }
     return { ...game, idleMs: Date.now() - (await this.ctx.storage.get('changedAt')) };
