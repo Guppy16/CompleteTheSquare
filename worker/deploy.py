@@ -13,7 +13,9 @@ from pathlib import Path
 import requests
 
 API = "https://api.cloudflare.com/client/v4"
-NAME = "cts-games"
+# The Worker serves https://cts.<account subdomain>.workers.dev; the database keeps its first name.
+NAME = "cts"
+DATABASE = "cts-games"
 HERE = Path(__file__).parent
 
 # The rate limiter's period is 10 or 60 seconds: two a minute is about one per 30 s.
@@ -33,10 +35,10 @@ def call(method: str, path: str, **kwargs) -> dict | list:
 
 def database_id(account: str) -> str:
     """The D1 database's id, creating the database if it does not exist."""
-    found = call("GET", f"/accounts/{account}/d1/database", params={"name": NAME})
+    found = call("GET", f"/accounts/{account}/d1/database", params={"name": DATABASE})
     if found:
         return found[0]["uuid"]
-    created = call("POST", f"/accounts/{account}/d1/database", json={"name": NAME})
+    created = call("POST", f"/accounts/{account}/d1/database", json={"name": DATABASE})
     return created["uuid"]
 
 

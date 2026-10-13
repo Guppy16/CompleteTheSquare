@@ -816,7 +816,7 @@ function loadMoves(moves) {
 // A game that cannot be sent (offline, rate-limited) waits for the next try,
 // without a word: sending is not part of playing.
 const PAST_GAMES = 100;
-const GAMES_URL = 'https://cts-games.guppy16.workers.dev/games';
+const GAMES_URL = 'https://cts.guppy16.workers.dev/games';
 const PAST_GAMES_KEY = 'cts:games';
 const MODE_NAMES = { board: 'Over the board', ai: 'Against AI', analysis: 'Analysis' };
 
