@@ -227,14 +227,19 @@ function rpcError(code, message) {
   return Object.assign(new Error(message), { code });
 }
 
-async function handle(message, env) {
+async function handle(message, env, origin) {
   const params = message.params ?? {};
   switch (message.method) {
     case 'initialize':
       return {
         protocolVersion: PROTOCOL_VERSIONS.includes(params.protocolVersion) ? params.protocolVersion : PROTOCOL_VERSIONS[1],
         capabilities: { tools: {}, resources: {} },
-        serverInfo: { name: 'complete-the-square', title: 'Complete the Square', version: '2.0.0' },
+        serverInfo: {
+          name: 'complete-the-square',
+          title: 'Complete the Square',
+          version: '2.0.0',
+          icons: [{ src: `${origin}/icon.svg`, mimeType: 'image/svg+xml', sizes: ['any'] }],
+        },
         instructions: `Play Complete the Square, a 5x5 board game, against the user: start with new_game.\n\n${HOW_TO_PLAY}`,
       };
     case 'ping':
@@ -290,7 +295,7 @@ export async function handleMcp(request, env) {
   const started = Date.now();
   const what = [message.method, message.params?.name, JSON.stringify(message.params?.arguments ?? '')].filter(Boolean).join(' ');
   try {
-    const result = await handle(message, env);
+    const result = await handle(message, env, new URL(request.url).origin);
     console.log(`${what} -> ${result?.isError ? `tool error: ${result.content[0].text}` : 'ok'} in ${Date.now() - started} ms`);
     return json({ jsonrpc: '2.0', id: message.id, result });
   } catch (error) {

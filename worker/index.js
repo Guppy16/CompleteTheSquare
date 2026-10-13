@@ -7,6 +7,7 @@
 // per IP in memory and never stores the IP. The body is sent as text/plain, so
 // the browser needs no preflight request.
 
+import icon from './icon.svg';
 import { handleMcp } from './mcp.js';
 
 export { Game } from './game.js';
@@ -21,7 +22,12 @@ function reply(status, text = '') {
 
 export default {
   async fetch(request, env) {
-    if (new URL(request.url).pathname === '/mcp') return handleMcp(request, env);
+    const { pathname } = new URL(request.url);
+    if (pathname === '/mcp') return handleMcp(request, env);
+    // The logo, for hosts that show the connector's icon.
+    if (request.method === 'GET' && ['/icon.svg', '/favicon.ico'].includes(pathname)) {
+      return new Response(icon, { headers: { ...CORS, 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' } });
+    }
     if (request.method !== 'POST' || new URL(request.url).pathname !== '/games') return reply(404, 'not found');
 
     const { success } = await env.LIMITER.limit({ key: request.headers.get('CF-Connecting-IP') || 'unknown' });

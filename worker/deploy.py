@@ -73,6 +73,7 @@ def upload_worker(account: str, database: str) -> None:
         "game.js": (HERE / "game.js", "application/javascript+module"),
         "rules.js": (HERE / "rules.js", "application/javascript+module"),
         "board.html": (HERE / "board.html", "text/plain"),
+        "icon.svg": (HERE.parent / "favicon.svg", "text/plain"),
         "ai.wasm": (HERE.parent / "square-game" / "ai.wasm", "application/wasm"),
     }
     files = {"metadata": (None, json.dumps(metadata), "application/json")}
