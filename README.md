@@ -28,4 +28,5 @@ Each candidate square holds a mini board of where its line ends.
 
 - Layout, commands and tools: [CLAUDE.md](CLAUDE.md).
 - Open questions and the to-do list: [Next steps](https://guppy16.github.io/CompleteTheSquare/docs/18-next-steps.html).
+- Playing Claude in the chat: [the connector](https://guppy16.github.io/CompleteTheSquare/connector).
 - What the site and the connector store: [Privacy policy](https://guppy16.github.io/CompleteTheSquare/privacy).
