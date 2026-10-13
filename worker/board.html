@@ -135,9 +135,11 @@
     *, *::before, *::after { animation: none !important; transition: none !important; }
   }
 
-  #status { margin: 12px 0 2px; text-align: center; font-weight: 600; }
-  .green { color: var(--green); }
-  .red { color: var(--red); }
+  #status { margin: 12px 0 2px; text-align: center; font-size: 16px; font-weight: bold; line-height: 1.6; }
+  /* A player's name as on the page: a tinted badge. */
+  .badge { padding: 2px 8px; border-radius: 4px; }
+  .badge.green { background-color: #4CAF5050; text-shadow: 0 0 3px #4CAF5080; }
+  .badge.red { background-color: #F4433650; text-shadow: 0 0 3px #F4433680; }
   /* One numbered pair of moves per line, with the position after it; the two
      squares just played are in the brighter shade. */
   #move-list { display: grid; align-content: start; gap: 4px; font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -155,16 +157,20 @@
   .mini-board .player-W.last { background: var(--green-bright); }
   .mini-board .player-B.last { background: var(--red-bright); }
   /* Controls in the page's blue: a press squashes, letting go springs back. */
-  #controls, #paste-form { display: flex; justify-content: center; gap: 6px; margin-top: 8px; }
+  #controls, #paste-form { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 8px; }
   #paste-form[hidden] { display: none; }
   button {
-    padding: 5px 12px; font: inherit; font-size: 13px; cursor: pointer;
+    padding: 8px 16px; font: inherit; font-size: 15px; cursor: pointer;
     background: #2196F3; color: white; border: none; border-radius: 4px;
     transition: transform calc(0.45s * var(--motion)) var(--spring);
   }
   button:hover:not(:disabled) { background: #1e88e5; }
   button:active:not(:disabled) { transform: scale(0.9); transition-duration: calc(0.08s * var(--motion)); }
-  button:disabled { opacity: 0.4; cursor: default; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.icon { padding: 8px 12px; line-height: 0; }
+  button.icon svg { width: 22px; height: 22px; fill: currentColor; }
+  #redo svg { transform: scaleX(-1); }      /* the redo arrow is the undo arrow mirrored */
+  #resign.confirm { background: var(--red); }
   #paste-input {
     flex: 1; min-width: 0; padding: 5px 8px; font: inherit; font-size: 13px;
     color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px;
@@ -179,10 +185,21 @@
       <div id="board"></div>
       <p id="status">Loading the game…</p>
       <div id="controls">
-        <button id="undo" title="Take back your last move and Claude's reply">Undo</button>
-        <button id="redo" title="Put back what Undo took">Redo</button>
-        <button id="copy" title="Copy the moves">Copy</button>
-        <button id="paste" title="Load a game from its moves">Paste</button>
+        <button id="undo" class="icon" aria-label="Undo" title="Undo">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V1.5L6.5 7 12 12.5V9a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/></svg>
+        </button>
+        <button id="redo" class="icon" aria-label="Redo" title="Redo">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V1.5L6.5 7 12 12.5V9a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/></svg>
+        </button>
+        <button id="copy" class="icon" aria-label="Copy moves" title="Copy moves">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>
+        </button>
+        <button id="paste" class="icon" aria-label="Paste moves" title="Paste moves">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 2h-4.2A3 3 0 0 0 12 0a3 3 0 0 0-2.8 2H5a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm-7 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm7 18H5V4h2v3h10V4h2v16z"/></svg>
+        </button>
+        <button id="resign" class="icon" aria-label="Resign" title="Resign">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.4 6 14 4H5v17h2v-7h5.6l.4 2h7V6z"/></svg>
+        </button>
       </div>
       <form id="paste-form" hidden>
         <input id="paste-input" placeholder="1. A1 C3  2. A2 B2" aria-label="Moves to load">
@@ -457,7 +474,14 @@ function clearPreview() {
   for (const cell of cells) cell.classList.remove('ghost-W', 'ghost-B', 'would-capture');
 }
 
-const player = (colour) => `<span class="${colour}">${colour === 'green' ? 'Green' : 'Red'}</span>`;
+const badge = (colour, text = colour === 'green' ? 'Green' : 'Red') => `<span class="badge ${colour}">${text}</span>`;
+const wins = (colour) => badge(colour, `${colour === 'green' ? 'Green' : 'Red'} wins!`);
+
+function statusOf(game) {
+  if (game.winner) return wins(game.winner) + (game.resigned ? ' by resignation' : '');
+  if (game.draw) return 'Draw by threefold repetition';
+  return game.toMove === game.claude ? `${badge(game.toMove)}: Claude is thinking…` : `${badge(game.toMove)}: click a square`;
+}
 
 // The moves as numbered pairs, each with a tiny picture of the position after
 // it; scrolled to the latest. `boards` holds [green, red] bitboards per move.
@@ -501,7 +525,7 @@ const bitboards = (owner) => ['W', 'B'].map((colour) => owner.reduce((mask, o, i
 let shownKey = null;                         // the moves shown, joined
 let shownGame = null;
 function showGame(game, delay = 250) {
-  const key = game.moves.join(' ');
+  const key = game.moves.join(' ') + (game.resigned ? ' resigned' : '');
   if (key === shownKey) return updateControls(game);
   shownKey = key;
   shownGame = game;
@@ -534,10 +558,7 @@ function showGame(game, delay = 250) {
 
   userColour = game.toMove === user ? COLOUR[user] : null;
   boardEl.classList.toggle('open', userColour !== null);
-  if (game.winner) statusEl.innerHTML = game.winner === user ? `You win as ${player(user)}!` : `Claude wins as ${player(game.winner)}.`;
-  else if (game.draw) statusEl.textContent = 'Draw: the same position for the third time.';
-  else if (userColour) statusEl.innerHTML = `Your move as ${player(user)}: click a square.`;
-  else statusEl.textContent = 'Claude is thinking…';
+  statusEl.innerHTML = statusOf(game);
   updateControls(game);
 }
 
@@ -587,7 +608,8 @@ async function onClick(i) {
   playOnBoard(i, colour, captured, corners);
   setControls(false);
   renderMoves([...before.moves, nameOf(i)], [...before.boards, bitboards(after)]);
-  statusEl.textContent = corners ? '' : 'Claude is thinking…';
+  const user = colour === 'W' ? 'green' : 'red';
+  statusEl.innerHTML = corners ? wins(user) : statusOf({ ...before, toMove: before.claude });
 
   let game;
   try {
@@ -600,29 +622,33 @@ async function onClick(i) {
   }
   shownKey = game.moves.join(' ');
   shownGame = game;
+  localRedo.length = 0;
   updateControls(game);
   if (!game.claudeWaiting && game.toMove === game.claude) {
     statusEl.textContent = 'Claude has stopped waiting: send it a message, like "your move", to carry on.';
   }
-  if (game.winner) statusEl.innerHTML = `You win as ${player(game.winner)}!`;
-  else if (game.draw) statusEl.textContent = 'Draw: the same position for the third time.';
+  if (game.toMove === null) statusEl.innerHTML = statusOf(game);
   else follow(game.moves.length);
 }
 
-// --- Undo, redo, copy and paste --------------------------------------------------
+// --- Undo, redo, copy, paste and resign --------------------------------------------
 
-const buttons = Object.fromEntries(['undo', 'redo', 'copy', 'paste'].map((id) => [id, document.getElementById(id)]));
+const buttons = Object.fromEntries(['undo', 'redo', 'copy', 'paste', 'resign'].map((id) => [id, document.getElementById(id)]));
 const pasteForm = document.getElementById('paste-form');
 const pasteInput = document.getElementById('paste-input');
+const localRedo = [];                         // games undone here, the latest last
 
-// Undo, redo and paste only while it is not Claude's move.
+// The user's plies: Green plays the even ones.
+const userPlies = (game) => game.moves.filter((_, i) => (i % 2 === 0 ? 'green' : 'red') !== game.claude).length;
+
+// Undo, redo, paste and resign only while it is not Claude's move.
 function updateControls(game) {
   const waiting = game.toMove === game.claude;
-  const userPlies = game.moves.filter((_, i) => (i % 2 === 0 ? 'green' : 'red') !== game.claude).length;
-  buttons.undo.disabled = waiting || userPlies === 0;
-  buttons.redo.disabled = waiting || !game.canRedo;
+  buttons.undo.disabled = waiting || game.resigned || userPlies(game) === 0;
+  buttons.redo.disabled = waiting || localRedo.length === 0;
   buttons.copy.disabled = game.moves.length === 0;
   buttons.paste.disabled = waiting;
+  buttons.resign.disabled = game.toMove === null;
   if (waiting) pasteForm.hidden = true;
 }
 
@@ -631,30 +657,85 @@ function setControls(enabled) {
   if (!enabled) pasteForm.hidden = true;
 }
 
-// Run one of the board's tools on the game, then show the game it returns.
-async function change(name, args, delay) {
+// The game before the user's last move, from the boards the move list holds.
+function undone(game) {
+  const userParity = game.claude === 'green' ? 1 : 0;
+  let from = game.moves.length - 1;
+  while (from >= 0 && from % 2 !== userParity) from--;
+  const moves = game.moves.slice(0, from);
+  const boards = game.boards.slice(0, from);
+  const [green, red] = boards.at(-1) ?? [0, 0];
+  const names = (mask) => cells.map((_, i) => i).filter((i) => mask & (1 << i)).map(nameOf);
+  return {
+    ...game, moves, boards, green: names(green), red: names(red), last: moves.at(-1) ?? null, captured: [],
+    toMove: game.claude === 'green' ? 'red' : 'green', winner: null, winningSquare: [], draw: false,
+  };
+}
+
+// Show `game` at once, then tell the server; if it refuses, show `back` again.
+async function changeNow(game, delay, tool, back) {
+  errorEl.style.display = 'none';
+  showGame(game, delay);
+  try {
+    await callTool(tool, { game: gameId });
+  } catch (error) {
+    shownKey = null;
+    showGame(back, -1);
+    showError(error.message);
+  }
+}
+
+buttons.undo.addEventListener('click', () => {
+  const before = shownGame;
+  localRedo.push(before);
+  changeNow({ ...undone(before), canRedo: true }, -1, 'undo', before);
+});
+
+buttons.redo.addEventListener('click', () => {
+  const before = shownGame;
+  const next = localRedo.pop();
+  changeNow(next, 0, 'redo', before);
+});
+
+// A first click turns the flag red; a second within 3 s resigns.
+let resignTimer = null;
+buttons.resign.addEventListener('click', async () => {
+  if (!buttons.resign.classList.contains('confirm')) {
+    buttons.resign.classList.add('confirm');
+    buttons.resign.title = 'Click again to resign';
+    resignTimer = setTimeout(() => buttons.resign.classList.remove('confirm'), 3000);
+    return;
+  }
+  clearTimeout(resignTimer);
+  buttons.resign.classList.remove('confirm');
+  buttons.resign.title = 'Resign';
+  setControls(false);
+  try {
+    showGame(await callTool('resign', { game: gameId }), -1);
+  } catch (error) {
+    showError(error.message);
+    updateControls(shownGame);
+  }
+});
+
+buttons.paste.addEventListener('click', () => {
+  pasteForm.hidden = !pasteForm.hidden;
+  if (!pasteForm.hidden) pasteInput.focus();
+});
+pasteForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  pasteForm.hidden = true;
   setControls(false);
   errorEl.style.display = 'none';
   try {
-    const game = await callTool(name, { game: gameId, ...args });
-    showGame(game, delay);
+    const game = await callTool('load_moves', { game: gameId, moves: pasteInput.value });
+    localRedo.length = 0;
+    showGame(game);
     if (game.toMove === game.claude) follow(game.moves.length);
   } catch (error) {
     showError(error.message);
     updateControls(shownGame);
   }
-}
-
-buttons.undo.addEventListener('click', () => change('undo', {}, -1));
-buttons.redo.addEventListener('click', () => change('redo', {}));
-buttons.paste.addEventListener('click', () => {
-  pasteForm.hidden = !pasteForm.hidden;
-  if (!pasteForm.hidden) pasteInput.focus();
-});
-pasteForm.addEventListener('submit', (event) => {
-  event.preventDefault();
-  pasteForm.hidden = true;
-  change('load_moves', { moves: pasteInput.value });
 });
 
 buttons.copy.addEventListener('click', async () => {

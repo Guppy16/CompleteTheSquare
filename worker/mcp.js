@@ -103,6 +103,13 @@ const TOOLS = [
     _meta: { ui: { visibility: ['app'] } },
   },
   {
+    name: 'resign',
+    title: 'Resign',
+    description: 'For the board: the user resigns, and Claude wins.',
+    inputSchema: { type: 'object', properties: { game: GAME_ID }, required: ['game'] },
+    _meta: { ui: { visibility: ['app'] } },
+  },
+  {
     name: 'load_moves',
     title: 'Load a game',
     description: 'For the board: replace the game with these moves; whoever is to move then plays on.',
@@ -136,7 +143,8 @@ function describe(game, gameId, next) {
     `Moves: ${game.moveText || '(none yet)'}`,
   ];
   if (game.captured.length) lines.push(`The last move captured ${game.captured.join(' ')}.`);
-  if (game.winner) lines.push(`Game over: ${game.winner === game.claude ? 'you' : 'the user'} (${game.winner}) won with ${game.winningSquare.join(' ')}.`);
+  if (game.resigned) lines.push(`Game over: the user resigned, so you (${game.claude}) win.`);
+  else if (game.winner) lines.push(`Game over: ${game.winner === game.claude ? 'you' : 'the user'} (${game.winner}) won with ${game.winningSquare.join(' ')}.`);
   else if (game.draw) lines.push('Game over: a draw, the same position for the third time.');
   else lines.push(next);
   lines.push(`Game id: ${gameId}`);
@@ -176,6 +184,7 @@ async function callTool(name, args, env) {
     return result(game, gameId, nextStep(game));
   }
   if (name === 'undo') return result(await stub.undo(), gameId, '');
+  if (name === 'resign') return result(await stub.resign(), gameId, '');
   if (name === 'redo') return result(await stub.redo(), gameId, '');
   if (name === 'load_moves') return result(await stub.load(parseMoves(args.moves)), gameId, '');
   if (name === 'game_state') {

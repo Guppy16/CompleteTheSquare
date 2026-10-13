@@ -2,8 +2,8 @@
 // the game reaches the same place. It keeps the moves, checks each one with
 // the rules, and holds calls that wait for a move open until the game changes:
 // Claude's wait_for_move for the user's click, the board's game_state for
-// Claude's reply. The user can also take moves back, put them back and load a
-// game from the board. A finished game goes into the games table.
+// Claude's reply. The user can also take moves back, put them back, load a
+// game and resign from the board. A finished game goes into the games table.
 
 import { DurableObject } from 'cloudflare:workers';
 import { other, position } from './rules.js';
@@ -14,6 +14,11 @@ const WAIT_MS = 4 * 60_000;
 
 // How long Claude waits for the user in all before it ends its turn.
 export const IDLE_MS = 20 * 60_000;
+
+// A game the user resigned is over, won by Claude.
+function withResignation(game, resigned) {
+  return resigned ? { ...game, resigned: true, toMove: null, winner: game.claude, winningSquare: [] } : { ...game, resigned: false };
+}
 
 export class Game extends DurableObject {
   waiting = [];                              // resolves for the calls waiting for a change
@@ -29,7 +34,19 @@ export class Game extends DurableObject {
     const claude = await this.ctx.storage.get('claude');
     if (!claude) throw new Error('There is no such game: start one with new_game.');
     const redo = (await this.ctx.storage.get('redo')) ?? [];
-    return { ...position(await this.ctx.storage.get('moves')), claude, canRedo: redo.length > 0 };
+    const game = { ...position(await this.ctx.storage.get('moves')), claude, canRedo: redo.length > 0 };
+    return withResignation(game, await this.ctx.storage.get('resigned'));
+  }
+
+  // The user gives up: Claude wins.
+  async resign() {
+    const game = await this.view();
+    if (game.toMove === null) throw new Error('The game is over.');
+    await this.ctx.storage.put('resigned', true);
+    const over = await this.view();
+    for (const wake of this.waiting.splice(0)) wake();
+    await this.record(over);
+    return over;
   }
 
   // Play `square` for Claude or the user, if it is their turn and legal.
@@ -47,6 +64,7 @@ export class Game extends DurableObject {
   // it is the user's move again.
   async undo() {
     const game = await this.view();
+    if (game.resigned) throw new Error('You resigned this game.');
     if (game.toMove === game.claude) throw new Error("Wait for Claude's move first.");
     const moves = await this.ctx.storage.get('moves');
     const userParity = game.claude === 'green' ? 1 : 0;  // Green plays the even plies
@@ -60,6 +78,7 @@ export class Game extends DurableObject {
   // Put back the moves the last undo took.
   async redo() {
     const game = await this.view();
+    if (game.resigned) throw new Error('You resigned this game.');
     if (game.toMove === game.claude) throw new Error("Wait for Claude's move first.");
     const redo = (await this.ctx.storage.get('redo')) ?? [];
     if (!redo.length) throw new Error('There is nothing to redo.');
@@ -70,6 +89,7 @@ export class Game extends DurableObject {
   async load(squares) {
     const game = await this.view();
     if (game.toMove === game.claude) throw new Error("Wait for Claude's move first.");
+    await this.ctx.storage.put('resigned', false);
     return this.save(squares, []);
   }
 
@@ -79,7 +99,7 @@ export class Game extends DurableObject {
     // claudeWaiting tells the board whether a move will reach Claude now, or
     // only once the user sends it a message.
     const claudeWaiting = this.claudeWaiting > 0 || Date.now() - this.lastWaitEnded < 30_000;
-    const game = { ...position(moves), claude, canRedo: redo.length > 0, claudeWaiting };
+    const game = withResignation({ ...position(moves), claude, canRedo: redo.length > 0, claudeWaiting }, false);
     await this.ctx.storage.put({ moves, redo, changedAt: Date.now() });
     for (const wake of this.waiting.splice(0)) wake();
     if (game.toMove === null) await this.record(game);
@@ -92,7 +112,7 @@ export class Game extends DurableObject {
     let game = await this.view();
     if (game.toMove === other(game.claude)) {
       this.claudeWaiting++;
-      await this.change();
+      await this.wait();
       this.claudeWaiting--;
       this.lastWaitEnded = Date.now();
       game = await this.view();
@@ -105,11 +125,11 @@ export class Game extends DurableObject {
   async watch(after) {
     const game = await this.view();
     if (after === undefined || game.moves.length > after || game.toMove === null) return game;
-    await this.change();
+    await this.wait();
     return this.view();
   }
 
-  change() {
+  wait() {
     return new Promise((resolve) => {
       this.waiting.push(resolve);
       setTimeout(resolve, WAIT_MS);
