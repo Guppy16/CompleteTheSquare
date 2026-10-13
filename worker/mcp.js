@@ -50,7 +50,7 @@ const TOOLS = [
   {
     name: 'new_game',
     title: 'New game of Complete the Square',
-    description: `Start a game of Complete the Square against the user, and show the board, which follows the game from then on.\n\n${HOW_TO_PLAY}\n\n${RULES}`,
+    description: `Start a game of Complete the Square (CTS for short) against the user, and show the board, which follows the game from then on.\n\n${HOW_TO_PLAY}\n\n${RULES}`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -243,7 +243,7 @@ async function handle(message, env, origin) {
             { src: `${origin}/icon.png`, mimeType: 'image/png', sizes: ['512x512'] },
           ],
         },
-        instructions: `Play Complete the Square, a 5x5 board game, against the user: start with new_game.\n\n${HOW_TO_PLAY}`,
+        instructions: `Play Complete the Square (CTS for short), a 5x5 board game, against the user: start with new_game.\n\n${HOW_TO_PLAY}`,
       };
     case 'ping':
       return {};
