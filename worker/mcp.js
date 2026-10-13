@@ -53,7 +53,10 @@ const TOOLS = [
     description: `Start a game of Complete the Square against the user, and show the board, which follows the game from then on.\n\n${HOW_TO_PLAY}\n\n${RULES}`,
     inputSchema: {
       type: 'object',
-      properties: { claude: { type: 'string', enum: PLAYERS, description: 'The colour you (Claude) play. Green moves first.' } },
+      properties: {
+        claude: { type: 'string', enum: PLAYERS, description: 'The colour you (Claude) play. Green moves first.' },
+        moves: { type: 'string', description: 'Only to resume a game that has expired: its moves so far, like "1. A1 C3  2. A2".' },
+      },
       required: ['claude'],
     },
     _meta: { ui: { resourceUri: BOARD_URI } },
@@ -69,7 +72,6 @@ const TOOLS = [
     title: "Wait for the user's move",
     description: "Wait for the user to play on the board, up to a few minutes. Returns their move and the position, or says they have not moved yet: then call it again.",
     inputSchema: { type: 'object', properties: { game: GAME_ID }, required: ['game'] },
-    annotations: { readOnlyHint: true },
   },
   {
     name: 'user_move',
@@ -121,10 +123,20 @@ const TOOLS = [
     title: 'Game state',
     description: 'For the board: the game once it has more than `after` moves (or has ended), waiting up to a few minutes; at once without `after`.',
     inputSchema: { type: 'object', properties: { game: GAME_ID, after: { type: 'integer', minimum: 0 } }, required: ['game'] },
-    annotations: { readOnlyHint: true },
     _meta: { ui: { visibility: ['app'] } },
   },
 ];
+
+// Hints for hosts: two tools only read, and none deletes anything or reaches
+// beyond this server. Tool names and arguments are public: Claude caches them
+// per connector, so they only ever gain new optional arguments.
+const READ_ONLY = ['wait_for_move', 'game_state'];
+for (const tool of TOOLS) {
+  tool.annotations = { title: tool.title, readOnlyHint: READ_ONLY.includes(tool.name), destructiveHint: false, openWorldHint: false };
+}
+
+// Bug reports kept a day, from everyone together.
+const REPORTS_PER_DAY = 50;
 
 const BOARD_RESOURCE = {
   uri: BOARD_URI,
@@ -159,13 +171,15 @@ async function callTool(name, args, env) {
   if (name === 'report_bug') {
     const description = String(args?.description ?? '').trim();
     if (!description || description.length > 4000) throw new Error('Describe the bug in 1 to 4000 characters.');
+    const { today } = await env.DB.prepare("SELECT COUNT(*) AS today FROM reports WHERE received_at > datetime('now', '-1 day')").first();
+    if (today >= REPORTS_PER_DAY) throw new Error('Too many bug reports today: please try again tomorrow, or open an issue at https://github.com/Guppy16/CompleteTheSquare/issues.');
     await env.DB.prepare('INSERT INTO reports (game, description) VALUES (?, ?)').bind(args.game ? String(args.game) : null, description).run();
     return { content: [{ type: 'text', text: 'Thanks: the report has been sent to the developer.' }] };
   }
   if (name === 'new_game') {
     if (!PLAYERS.includes(args?.claude)) throw new Error('Pass "claude": "green" or "red".');
     const id = env.GAMES.newUniqueId();
-    const game = await env.GAMES.get(id).start(args.claude);
+    const game = await env.GAMES.get(id).start(args.claude, parseMoves(args.moves ?? ''));
     return result(game, id.toString(), nextStep(game));
   }
   const gameId = String(args?.game ?? '');

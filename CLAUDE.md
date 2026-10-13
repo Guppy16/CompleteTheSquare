@@ -62,3 +62,7 @@ searches one at a time.
 - Fail loudly: unexpected states throw and show in the page's error banner, never a
   silent default.
 - Scores are for the side to move, from -1 to +1; forced wins are just above ±1.
+- The connector's tool names and arguments are public: Claude caches them per connector, so
+  they only ever gain new tools and optional arguments, never renames or removals. A change
+  to the tool list reaches a user only after they reconnect; a change to `board.html`, on
+  their next page load.
