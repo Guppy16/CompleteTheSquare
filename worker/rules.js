@@ -22,6 +22,13 @@ export function parseSquare(text) {
   return (Number(match[2]) - 1) * SIZE + COLUMNS.indexOf(match[1].toUpperCase());
 }
 
+// "1. C3 A1  2. B2" or "C3 A1 B2" -> square indices; throws on anything else.
+export function parseMoves(text) {
+  const tokens = String(text).trim().split(/[\s,]+/).filter((t) => t && !/^\d+\.$/.test(t));
+  if (tokens.length > 500) throw new Error('That game is too long.');
+  return tokens.map(parseSquare);
+}
+
 function squaresOf(mask) {
   const names = [];
   for (let i = 0; i < SIZE * SIZE; i++) if (mask & (1 << i)) names.push(squareName(i));

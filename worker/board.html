@@ -154,6 +154,21 @@
   .mini-board .player-B { background: var(--red); }
   .mini-board .player-W.last { background: var(--green-bright); }
   .mini-board .player-B.last { background: var(--red-bright); }
+  /* Controls in the page's blue: a press squashes, letting go springs back. */
+  #controls, #paste-form { display: flex; justify-content: center; gap: 6px; margin-top: 8px; }
+  #paste-form[hidden] { display: none; }
+  button {
+    padding: 5px 12px; font: inherit; font-size: 13px; cursor: pointer;
+    background: #2196F3; color: white; border: none; border-radius: 4px;
+    transition: transform calc(0.45s * var(--motion)) var(--spring);
+  }
+  button:hover:not(:disabled) { background: #1e88e5; }
+  button:active:not(:disabled) { transform: scale(0.9); transition-duration: calc(0.08s * var(--motion)); }
+  button:disabled { opacity: 0.4; cursor: default; }
+  #paste-input {
+    flex: 1; min-width: 0; padding: 5px 8px; font: inherit; font-size: 13px;
+    color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px;
+  }
   #error { display: none; margin: 8px 0 0; padding: 6px 8px; border-radius: 6px; background: #5c1f1b; color: #ffd9d6; font-size: 12px; white-space: pre-wrap; }
 </style>
 </head>
@@ -163,6 +178,16 @@
     <div class="play">
       <div id="board"></div>
       <p id="status">Loading the game…</p>
+      <div id="controls">
+        <button id="undo" title="Take back your last move and Claude's reply">Undo</button>
+        <button id="redo" title="Put back what Undo took">Redo</button>
+        <button id="copy" title="Copy the moves">Copy</button>
+        <button id="paste" title="Load a game from its moves">Paste</button>
+      </div>
+      <form id="paste-form" hidden>
+        <input id="paste-input" placeholder="1. A1 C3  2. A2 B2" aria-label="Moves to load">
+        <button>Load</button>
+      </form>
     </div>
     <div id="move-list"></div>
   </div>
@@ -473,12 +498,16 @@ const bitboards = (owner) => ['W', 'B'].map((colour) => owner.reduce((mask, o, i
 // Show the position before the last move, then play the last move in, after
 // `delay` ms, or with no animation if `delay` is negative. Does nothing if the
 // board already shows this many moves.
-let shownMoves = -1;
+let shownKey = null;                         // the moves shown, joined
 let shownGame = null;
 function showGame(game, delay = 250) {
-  if (game.moves.length === shownMoves) return;
-  shownMoves = game.moves.length;
+  const key = game.moves.join(' ');
+  if (key === shownKey) return updateControls(game);
+  shownKey = key;
   shownGame = game;
+  for (const cell of cells) cell.classList.remove('winner', 'capture', 'drop', 'win-pulse');
+  boardEl.classList.remove('won');
+  winOutline.hidden = true;
   const user = game.claude === 'green' ? 'red' : 'green';
   gameId = game.game;
   owner = Array(SIZE * SIZE).fill(null);
@@ -509,6 +538,7 @@ function showGame(game, delay = 250) {
   else if (game.draw) statusEl.textContent = 'Draw: the same position for the third time.';
   else if (userColour) statusEl.innerHTML = `Your move as ${player(user)}: click a square.`;
   else statusEl.textContent = 'Claude is thinking…';
+  updateControls(game);
 }
 
 // Call one of the connector's tools; returns the game it answers with.
@@ -555,6 +585,7 @@ async function onClick(i) {
   for (const j of captured) after[j] = null;
   const corners = wonSquare(after, colour);
   playOnBoard(i, colour, captured, corners);
+  setControls(false);
   renderMoves([...before.moves, nameOf(i)], [...before.boards, bitboards(after)]);
   statusEl.textContent = corners ? '' : 'Claude is thinking…';
 
@@ -562,19 +593,84 @@ async function onClick(i) {
   try {
     game = await callTool('user_move', { game: gameId, move: nameOf(i) });
   } catch (error) {
-    for (const cell of cells) cell.classList.remove('capture', 'drop', 'win-pulse', 'winner');
-    boardEl.classList.remove('won');
-    winOutline.hidden = true;
-    shownMoves = -1;
+    shownKey = null;
     showGame(before, -1);
     statusEl.textContent = 'That move was not played.';
     return showError(error.message);
   }
-  shownMoves = game.moves.length;
+  shownKey = game.moves.join(' ');
   shownGame = game;
+  updateControls(game);
   if (game.winner) statusEl.innerHTML = `You win as ${player(game.winner)}!`;
   else if (game.draw) statusEl.textContent = 'Draw: the same position for the third time.';
   else follow(game.moves.length);
+}
+
+// --- Undo, redo, copy and paste --------------------------------------------------
+
+const buttons = Object.fromEntries(['undo', 'redo', 'copy', 'paste'].map((id) => [id, document.getElementById(id)]));
+const pasteForm = document.getElementById('paste-form');
+const pasteInput = document.getElementById('paste-input');
+
+// Undo, redo and paste only while it is not Claude's move.
+function updateControls(game) {
+  const waiting = game.toMove === game.claude;
+  const userPlies = game.moves.filter((_, i) => (i % 2 === 0 ? 'green' : 'red') !== game.claude).length;
+  buttons.undo.disabled = waiting || userPlies === 0;
+  buttons.redo.disabled = waiting || !game.canRedo;
+  buttons.copy.disabled = game.moves.length === 0;
+  buttons.paste.disabled = waiting;
+  if (waiting) pasteForm.hidden = true;
+}
+
+function setControls(enabled) {
+  for (const button of Object.values(buttons)) button.disabled = !enabled;
+  if (!enabled) pasteForm.hidden = true;
+}
+
+// Run one of the board's tools on the game, then show the game it returns.
+async function change(name, args, delay) {
+  setControls(false);
+  errorEl.style.display = 'none';
+  try {
+    const game = await callTool(name, { game: gameId, ...args });
+    showGame(game, delay);
+    if (game.toMove === game.claude) follow(game.moves.length);
+  } catch (error) {
+    showError(error.message);
+    updateControls(shownGame);
+  }
+}
+
+buttons.undo.addEventListener('click', () => change('undo', {}, -1));
+buttons.redo.addEventListener('click', () => change('redo', {}));
+buttons.paste.addEventListener('click', () => {
+  pasteForm.hidden = !pasteForm.hidden;
+  if (!pasteForm.hidden) pasteInput.focus();
+});
+pasteForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  pasteForm.hidden = true;
+  change('load_moves', { moves: pasteInput.value });
+});
+
+buttons.copy.addEventListener('click', async () => {
+  const text = moveText(shownGame.moves);
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    // The host may not allow the clipboard: show the moves to copy by hand.
+    return showError(`Could not copy. The moves: ${text}`);
+  }
+  const status = statusEl.innerHTML;
+  statusEl.textContent = 'Moves copied.';
+  setTimeout(() => { if (statusEl.textContent === 'Moves copied.') statusEl.innerHTML = status; }, 1500);
+});
+
+function moveText(moves) {
+  const pairs = [];
+  for (let i = 0; i < moves.length; i += 2) pairs.push(`${i / 2 + 1}. ${moves.slice(i, i + 2).join(' ')}`);
+  return pairs.join('  ');
 }
 
 buildBoard();

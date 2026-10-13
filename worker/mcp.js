@@ -13,7 +13,7 @@
 // Claude's moves through game_state, a tool only the board sees.
 
 import boardHtml from './board.html';
-import { PLAYERS, other, parseSquare } from './rules.js';
+import { PLAYERS, other, parseMoves, parseSquare } from './rules.js';
 
 // Hosts cache a view by its address, so the address carries a hash of the
 // HTML: a changed board gets a new address (once the host reloads the tool list).
@@ -38,7 +38,9 @@ const HOW_TO_PLAY = `You play one colour and choose your own moves; the user pla
 
 Think each move through before you play it: what it captures, which squares it brings you closer to completing, and what the user could capture or complete in reply.
 
-Keep the game going within your turn: after each of your moves, call wait_for_move, and call it again whenever it says the user has not moved yet. Never ask the user to send a message to continue. When the game ends, say who won.`;
+Keep the game going within your turn: after each of your moves, call wait_for_move, and call it again whenever it says the user has not moved yet. Never ask the user to send a message to continue. When the game ends, say who won.
+
+The user can also take moves back, put them back and load a game on the board, so always go by the position the tools return, not by your memory of the game.`;
 
 const GAME_ID = { type: 'string', description: 'The game id from new_game.' };
 const SQUARE = { type: 'string', description: 'A square: a column A-E and a row 1-5, like C3.' };
@@ -86,6 +88,27 @@ const TOOLS = [
     },
   },
   {
+    name: 'undo',
+    title: 'Take back',
+    description: "For the board: take back the user's last move and Claude's reply.",
+    inputSchema: { type: 'object', properties: { game: GAME_ID }, required: ['game'] },
+    _meta: { ui: { visibility: ['app'] } },
+  },
+  {
+    name: 'redo',
+    title: 'Put back',
+    description: 'For the board: put back the moves the last undo took.',
+    inputSchema: { type: 'object', properties: { game: GAME_ID }, required: ['game'] },
+    _meta: { ui: { visibility: ['app'] } },
+  },
+  {
+    name: 'load_moves',
+    title: 'Load a game',
+    description: 'For the board: replace the game with these moves; whoever is to move then plays on.',
+    inputSchema: { type: 'object', properties: { game: GAME_ID, moves: { type: 'string' } }, required: ['game', 'moves'] },
+    _meta: { ui: { visibility: ['app'] } },
+  },
+  {
     name: 'game_state',
     title: 'Game state',
     description: 'For the board: the game once it has more than `after` moves (or has ended), waiting up to about 45 seconds; at once without `after`.',
@@ -99,7 +122,7 @@ const BOARD_RESOURCE = {
   uri: BOARD_URI,
   name: 'Complete the Square board',
   mimeType: 'text/html;profile=mcp-app',
-  _meta: { ui: { prefersBorder: false } },
+  _meta: { ui: { prefersBorder: false, permissions: { clipboardWrite: {} } } },   // for the Copy button
 };
 
 // The game as text for Claude, ending with what to do next.
@@ -151,6 +174,9 @@ async function callTool(name, args, env) {
     const game = await stub.move('user', parseSquare(args.move));
     return result(game, gameId, nextStep(game));
   }
+  if (name === 'undo') return result(await stub.undo(), gameId, '');
+  if (name === 'redo') return result(await stub.redo(), gameId, '');
+  if (name === 'load_moves') return result(await stub.load(parseMoves(args.moves)), gameId, '');
   if (name === 'game_state') {
     const game = await stub.watch(Number.isInteger(args.after) ? args.after : undefined);
     return result(game, gameId, nextStep(game));
@@ -158,7 +184,7 @@ async function callTool(name, args, env) {
   if (name === 'wait_for_move') {
     const game = await stub.waitForUser();
     const next = game.toMove === game.claude
-      ? `The user played ${game.last}. Your move (${game.claude}): call play.`
+      ? `The last move was ${game.last ?? '(none)'}. Your move (${game.claude}): call play.`
       : 'The user has not moved yet: call wait_for_move again.';
     return result(game, gameId, next);
   }
