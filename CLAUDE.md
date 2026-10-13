@@ -50,6 +50,11 @@ All `cargo run --release --example ...` from `wasm/`:
 | `tree_diagram -- --green A1,C1 --red B1` | a two-ply search tree with a board at every node |
 | `animate_game -- "1. A1 B2 2. C3"` | an animated SVG of a game, like the README's |
 | `animate_analysis -- 3` | an animated SVG of the Analysis tab over 3 moves, like the README's |
+| `first_moves -- 14 12` | score Green's six distinct first moves at depths 1 to 14, on 12 threads |
+
+`--features rotated-squares` builds the variant where tilted squares win too (A2 B1 C2 B3):
+50 winning squares instead of 30, and no opening book. Test both: `cargo test --release`
+with and without it.
 
 Depth 14 takes about half an hour, depth 16 about three hours on 16 threads. Run deep
 searches one at a time.

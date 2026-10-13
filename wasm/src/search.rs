@@ -554,6 +554,10 @@ const OPENING_BOOK: [(usize, Option<usize>); 6] = [
 
 /// The book's reply when `state` is one piece into the game, else None.
 pub fn book_move(state: &State) -> Option<Bit> {
+    // The book was searched for the standard rules only.
+    if cfg!(feature = "rotated-squares") {
+        return None;
+    }
     if state.occupied().count_ones() != 1 {
         return None;
     }

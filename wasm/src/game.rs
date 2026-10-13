@@ -124,20 +124,25 @@ pub fn tables() -> &'static Tables {
 }
 
 fn build_tables() -> Tables {
+    // A square is a corner (r, c) and a side (a, b): its corners are (r, c),
+    // (r + b, c + a), (r + a + b, c + a - b) and (r + a, c - b). Taking a >= 1
+    // and b >= 0 names each square once. b = 0 gives the squares along the rows
+    // and columns; the rotated-squares variant also counts the tilted ones (b > 0).
+    let max_tilt = if cfg!(feature = "rotated-squares") { ROWS.max(COLS) } else { 0 };
     let mut corner_masks = vec![Vec::new(); N];
-    let s = ROWS.min(COLS);
-    for size in 2..=s {
-        for r in 0..=(ROWS - size) {
-            for c in 0..=(COLS - size) {
-                let corners = [
-                    square_bit(r, c),
-                    square_bit(r, c + size - 1),
-                    square_bit(r + size - 1, c),
-                    square_bit(r + size - 1, c + size - 1),
-                ];
-                let mask = corners.iter().fold(0, |m, b| m | b);
-                for b in corners {
-                    corner_masks[bit_index(b)].push(mask);
+    for a in 1..ROWS.max(COLS) as i32 {
+        for b in 0..=max_tilt as i32 {
+            for r in 0..ROWS as i32 {
+                for c in 0..COLS as i32 {
+                    let corners = [(r, c), (r + b, c + a), (r + a + b, c + a - b), (r + a, c - b)];
+                    if !corners.iter().all(|&(r, c)| (0..ROWS as i32).contains(&r) && (0..COLS as i32).contains(&c)) {
+                        continue;
+                    }
+                    let bits = corners.map(|(r, c)| square_bit(r as usize, c as usize));
+                    let mask = bits.iter().fold(0, |m, b| m | b);
+                    for b in bits {
+                        corner_masks[bit_index(b)].push(mask);
+                    }
                 }
             }
         }

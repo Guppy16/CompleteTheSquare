@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2021"
 description = "Rules engine and AI for Complete The Square, compiled to WebAssembly"
 
+[features]
+# A variant where tilted squares win too (corners like A2 B1 C2 B3): 50 squares
+# on the 5x5 board instead of 30. Turns off the opening book.
+rotated-squares = []
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 

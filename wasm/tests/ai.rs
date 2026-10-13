@@ -96,6 +96,7 @@ fn alpha_beta_matches_plain_minimax() {
 }
 
 #[test]
+#[cfg_attr(feature = "rotated-squares", ignore = "positions solved under the standard rules")]
 fn ai_behaviour() {
     let best = |s: State| best_move_index(&s, 5, &[]).map(|i| (i / 5, i % 5)).unwrap();
     // Takes an immediate win.
@@ -240,6 +241,7 @@ fn symmetric_positions_share_a_key() {
 }
 
 #[test]
+#[cfg_attr(feature = "rotated-squares", ignore = "the variant has no opening book")]
 fn opening_book_replies_through_symmetry() {
     use complete_the_square_ai::search::book_move;
     // After A1 the book says B2; after the rotated opening E5 it must say the
