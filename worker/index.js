@@ -8,6 +8,7 @@
 // the browser needs no preflight request.
 
 import icon from './icon.svg';
+import iconPng from './icon.png';
 import { handleMcp } from './mcp.js';
 
 export { Game } from './game.js';
@@ -15,6 +16,11 @@ export { Game } from './game.js';
 const RESULTS = ['green', 'red', 'draw'];
 const MODES = ['board', 'ai', 'analysis'];
 const CORS = { 'Access-Control-Allow-Origin': '*' };
+
+// The home page: where favicon finders look for the icon.
+const HOME = `<!doctype html><meta charset="utf-8"><title>Complete the Square</title>
+<link rel="icon" type="image/png" href="/icon.png"><link rel="icon" type="image/svg+xml" href="/icon.svg">
+<p>The Complete the Square connector: <a href="https://guppy16.github.io/CompleteTheSquare/connector">how to use it</a>.`;
 
 function reply(status, text = '') {
   return new Response(text || null, { status, headers: CORS });
@@ -24,10 +30,14 @@ export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
     if (pathname === '/mcp') return handleMcp(request, env);
-    // The logo, for hosts that show the connector's icon.
-    if (request.method === 'GET' && ['/icon.svg', '/favicon.ico'].includes(pathname)) {
+    // The logo: Claude and its directory show the favicon of the server's address.
+    if (request.method === 'GET' && pathname === '/icon.svg') {
       return new Response(icon, { headers: { ...CORS, 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' } });
     }
+    if (request.method === 'GET' && ['/icon.png', '/favicon.ico'].includes(pathname)) {
+      return new Response(iconPng, { headers: { ...CORS, 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' } });
+    }
+    if (request.method === 'GET' && pathname === '/') return new Response(HOME, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
     if (request.method !== 'POST' || new URL(request.url).pathname !== '/games') return reply(404, 'not found');
 
     const { success } = await env.LIMITER.limit({ key: request.headers.get('CF-Connecting-IP') || 'unknown' });

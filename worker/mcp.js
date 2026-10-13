@@ -238,7 +238,10 @@ async function handle(message, env, origin) {
           name: 'complete-the-square',
           title: 'Complete the Square',
           version: '2.0.0',
-          icons: [{ src: `${origin}/icon.svg`, mimeType: 'image/svg+xml', sizes: ['any'] }],
+          icons: [
+            { src: `${origin}/icon.svg`, mimeType: 'image/svg+xml', sizes: ['any'] },
+            { src: `${origin}/icon.png`, mimeType: 'image/png', sizes: ['512x512'] },
+          ],
         },
         instructions: `Play Complete the Square, a 5x5 board game, against the user: start with new_game.\n\n${HOW_TO_PLAY}`,
       };
