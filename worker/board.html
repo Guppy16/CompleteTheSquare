@@ -475,10 +475,10 @@ function clearPreview() {
 }
 
 const badge = (colour, text = colour === 'green' ? 'Green' : 'Red') => `<span class="badge ${colour}">${text}</span>`;
-const wins = (colour) => badge(colour, `${colour === 'green' ? 'Green' : 'Red'} wins!`);
+const wins = (colour) => `${badge(colour)} wins!`;
 
 function statusOf(game) {
-  if (game.winner) return wins(game.winner) + (game.resigned ? ' by resignation' : '');
+  if (game.winner) return game.resigned ? `${badge(game.winner)} wins by resignation` : wins(game.winner);
   if (game.draw) return 'Draw by threefold repetition';
   return game.toMove === game.claude ? `${badge(game.toMove)}: Claude is thinking…` : `${badge(game.toMove)}: click a square`;
 }
@@ -697,18 +697,27 @@ buttons.redo.addEventListener('click', () => {
   changeNow(next, 0, 'redo', before);
 });
 
-// A first click turns the flag red; a second within 3 s resigns.
+// A first click turns the flag red and asks in the status line; a second
+// within 3 s resigns.
+const RESIGN_ASK = 'Resign? Click the flag again to confirm.';
 let resignTimer = null;
+let statusBeforeResign = '';
+function cancelResign() {
+  clearTimeout(resignTimer);
+  buttons.resign.classList.remove('confirm');
+  buttons.resign.title = 'Resign';
+  if (statusEl.textContent === RESIGN_ASK) statusEl.innerHTML = statusBeforeResign;
+}
 buttons.resign.addEventListener('click', async () => {
   if (!buttons.resign.classList.contains('confirm')) {
     buttons.resign.classList.add('confirm');
     buttons.resign.title = 'Click again to resign';
-    resignTimer = setTimeout(() => buttons.resign.classList.remove('confirm'), 3000);
+    statusBeforeResign = statusEl.innerHTML;
+    statusEl.textContent = RESIGN_ASK;
+    resignTimer = setTimeout(cancelResign, 3000);
     return;
   }
-  clearTimeout(resignTimer);
-  buttons.resign.classList.remove('confirm');
-  buttons.resign.title = 'Resign';
+  cancelResign();
   setControls(false);
   try {
     showGame(await callTool('resign', { game: gameId }), -1);
