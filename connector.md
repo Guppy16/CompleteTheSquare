@@ -7,6 +7,8 @@ needs no account and no sign-in.
 You can also [play on the website](https://guppy16.github.io/CompleteTheSquare/), against
 its engine or a friend, and read [how the engine works](https://guppy16.github.io/CompleteTheSquare/docs/).
 
+<p align="center"><img src="docs/img/gameplay.png" alt="the board in the chat, mid-game" width="540"></p>
+
 ## Set it up
 
 1. In Claude, open **Settings → Connectors** and choose **Add custom connector**.
