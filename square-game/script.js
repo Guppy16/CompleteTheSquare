@@ -1038,21 +1038,10 @@ async function loadAI() {
 }
 
 // The title opens to "complete the square" on a tap (hover and focus are CSS).
-// On a first visit it unfolds and folds back once, to show what cts stands for.
+// The page loads with it open (index.html) and folds it to "cts" a moment later.
 const titleEl = document.getElementById('title');
-const TITLE_SEEN_KEY = 'cts:title-seen';
 titleEl.addEventListener('click', () => titleEl.classList.toggle('open'));
-let titleSeen = false;
-try {
-  titleSeen = localStorage.getItem(TITLE_SEEN_KEY) !== null;
-  localStorage.setItem(TITLE_SEEN_KEY, '1');
-} catch {
-  // storage blocked: every visit is a first one
-}
-if (!titleSeen) {
-  setTimeout(() => titleEl.classList.add('open'), 400);
-  setTimeout(() => titleEl.classList.remove('open'), 2200);
-}
+setTimeout(() => titleEl.classList.remove('open'), 1200);
 
 buildBoard();
 statusEl.textContent = 'Loading…';
