@@ -35,6 +35,7 @@ const slideLabelEl = slideEl.querySelector('.slide-label');
 const friendButton = document.getElementById('play-friend');
 const inviteEl = document.getElementById('online-invite');
 const linkButton = inviteEl.querySelector('.link');
+const cancelInviteButton = document.getElementById('cancel-invite');
 const linkLabelEl = linkButton.querySelector('.label');
 const playersEl = document.getElementById('players');
 const playerEls = Array.from(playersEl.querySelectorAll('.player'));
@@ -564,5 +565,9 @@ function renderOnline() {
 })();
 
 friendButton.addEventListener('click', playFriend);
+cancelInviteButton.addEventListener('click', () => {
+  onlineSend({ type: 'cancel' });      // the server deletes the game, so the link stops working
+  leaveGame();
+});
 quickAgainButton.addEventListener('click', findOpponent);
 linkButton.addEventListener('click', copyLink);

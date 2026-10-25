@@ -903,7 +903,22 @@ body.no-game :is(#board-area, #status, #controls, #move-list) {
 }
 
 #online .waiting {
-  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Cancel a friend game nobody has joined: quiet, like "or play a friend". */
+#cancel-invite {
+  padding: 4px 8px;
+  background: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+#cancel-invite:hover {
+  background: none;
+  color: var(--text);
 }
 
 /* Three dots that bounce in turn, like someone typing. */

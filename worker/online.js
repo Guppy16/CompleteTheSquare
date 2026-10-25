@@ -114,7 +114,13 @@ export class Room extends DurableObject {
   }
 
   async alarm() {
-    for (const ws of this.ctx.getWebSockets()) ws.close(1000, 'This game has expired.');
+    await this.close('This game has expired.');
+  }
+
+  // Delete the game and close its sockets: it expired, or was cancelled before anyone joined.
+  async close(reason) {
+    for (const ws of this.ctx.getWebSockets()) ws.close(1000, reason);
+    await this.ctx.storage.deleteAlarm();
     await this.ctx.storage.deleteAll();
   }
 
@@ -176,7 +182,7 @@ export class Room extends DurableObject {
     }
     if (!colour) return send(ws, { type: 'error', message: 'You are watching this game.' });
     try {
-      await this.act(colour, message);
+      if (await this.act(colour, message) === 'closed') return;
       await this.ctx.storage.setAlarm(Date.now() + KEEP_MS);
     } catch (err) {
       send(ws, { type: 'error', message: err.message });
@@ -229,6 +235,10 @@ export class Room extends DurableObject {
         if (after.toMove === null) await this.finish({ winner: after.winner, how: after.winner ? 'square' : 'repetition' });
         return;
       }
+      case 'cancel':                     // a friend game nobody has joined yet
+        if (seats[opponent]) throw new Error('Your opponent has joined: resign instead.');
+        await this.close('The game was cancelled.');
+        return 'closed';
       case 'resign':
         if (over) throw new Error('The game is over.');
         if (!seats[opponent]) throw new Error('Wait for your opponent to join.');

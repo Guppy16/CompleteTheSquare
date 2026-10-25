@@ -2,7 +2,7 @@
 //
 //   CTS_URL=https://cts-dev.guppy16.workers.dev node worker/test/online.e2e.mjs
 //
-// Two scripted players play a friend game (illegal moves, a take-back, a win,
+// Two scripted players cancel a friend game, then play one (illegal moves, a take-back, a win,
 // a rematch, a watcher), then a quick match from the queue, and a game won by
 // claiming it when the opponent leaves. Every game is rated. Needs Node 22+ (WebSocket).
 import assert from 'node:assert/strict';
@@ -71,6 +71,16 @@ assert.deepEqual(me.body, { rating: 1500, provisional: true, games: 0 });
 assert.equal((await post('/online/me', { ...alice, key: bob.key })).status, 403);
 await post('/online/me', bob);
 
+step('a friend game nobody has joined can be cancelled, and its link stops working');
+const cancelled = (await post('/online/new', { ...alice, colour: 'green' })).body.game;
+const x = connect(`/online/game/${cancelled}`, alice);
+await x.opened;
+await x.next(state());
+const closed = new Promise((resolve) => x.ws.addEventListener('close', resolve));
+x.send({ type: 'cancel' });
+await closed;
+await assert.rejects(connect(`/online/game/${cancelled}`, bob).opened);
+
 step('Alice makes a friend game as Green; Bob joins by the link as Red');
 const made = await post('/online/new', { ...alice, colour: 'green' });
 assert.equal(made.status, 200);
@@ -89,6 +99,8 @@ s = await b.next(state());
 assert.equal(s.you, 'red');
 s = await a.next(state((m) => m.players.red?.connected));
 assert.equal(s.players.red.rating, 1500);
+a.send({ type: 'cancel' });
+assert.match((await a.next((m) => m.type === 'error')).message, /resign instead/);
 
 step('moves out of turn and onto taken squares are refused');
 b.send({ type: 'move', square: sq('E5') });
