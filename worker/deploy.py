@@ -1,9 +1,14 @@
-"""Deploy the games Worker (and its MCP connector) to Cloudflare.
+"""Deploy the games Worker (its MCP connector and online games) to Cloudflare.
 
     set -a && . ./.env && python3 worker/deploy.py
 
 The token in CLOUDFLARE_API_TOKEN needs Workers Scripts edit and D1 edit.
-Safe to re-run: the database and its table are only created once.
+Safe to re-run: the database and its tables are only created once.
+
+A test copy, with its own database and Durable Objects, for trying a change
+before it goes live (the page on localhost talks to it):
+
+    set -a && . ./.env && CTS_WORKER=cts-dev CTS_DATABASE=cts-dev-games python3 worker/deploy.py
 """
 
 import json
@@ -14,15 +19,22 @@ import requests
 
 API = "https://api.cloudflare.com/client/v4"
 # The Worker serves https://cts.<account subdomain>.workers.dev; the database keeps its first name.
-NAME = "cts"
-DATABASE = "cts-games"
+NAME = os.environ.get("CTS_WORKER", "cts")
+DATABASE = os.environ.get("CTS_DATABASE", "cts-games")
 HERE = Path(__file__).parent
 
 # The rate limiter's period is 10 or 60 seconds: two a minute is about one per 30 s.
 RATE_LIMIT = {"limit": 2, "period": 60}
+# Online games: creating one, joining the queue, (re)connecting, per IP.
+ONLINE_RATE_LIMIT = {"limit": 30, "period": 60}
 
-# Creates the Game class (worker/game.js), one Durable Object per game against Claude.
-MIGRATION = {"new_tag": "v1", "new_sqlite_classes": ["Game"]}
+# Durable Object classes, created by migrations applied in order, each once:
+# v1 the Game class (worker/game.js), one per game against Claude; v2 the
+# Room class, one per online game, and the Lobby (worker/online.js).
+MIGRATIONS = [
+    ("v1", {"new_sqlite_classes": ["Game"]}),
+    ("v2", {"new_sqlite_classes": ["Room", "Lobby"]}),
+]
 
 
 def call(method: str, path: str, **kwargs) -> dict | list:
@@ -60,18 +72,34 @@ def upload_worker(account: str, database: str) -> None:
                 "namespace_id": "1001",
                 "simple": RATE_LIMIT,
             },
+            {
+                "type": "ratelimit",
+                "name": "ONLINE_LIMITER",
+                "namespace_id": "1002",
+                "simple": ONLINE_RATE_LIMIT,
+            },
             {"type": "durable_object_namespace", "name": "GAMES", "class_name": "Game"},
+            {"type": "durable_object_namespace", "name": "ROOMS", "class_name": "Room"},
+            {"type": "durable_object_namespace", "name": "LOBBY", "class_name": "Lobby"},
         ],
     }
-    # Durable Object classes are created by a migration, applied once.
+    # The migrations after the last one applied, if any.
     tag = migration_tag(account)
-    if tag != MIGRATION["new_tag"]:
-        metadata["migrations"] = {"old_tag": tag, **MIGRATION} if tag else MIGRATION
+    tags = [t for t, _ in MIGRATIONS]
+    pending = MIGRATIONS[tags.index(tag) + 1:] if tag else MIGRATIONS
+    if pending:
+        metadata["migrations"] = {
+            **({"old_tag": tag} if tag else {}),
+            "new_tag": pending[-1][0],
+            "steps": [step for _, step in pending],
+        }
     modules = {
         "index.js": (HERE / "index.js", "application/javascript+module"),
         "mcp.js": (HERE / "mcp.js", "application/javascript+module"),
         "game.js": (HERE / "game.js", "application/javascript+module"),
         "rules.js": (HERE / "rules.js", "application/javascript+module"),
+        "online.js": (HERE / "online.js", "application/javascript+module"),
+        "ratings.js": (HERE / "ratings.js", "application/javascript+module"),
         "board.html": (HERE / "board.html", "text/plain"),
         "icon.svg": (HERE.parent / "favicon.svg", "text/plain"),
         "icon.png": (HERE / "icon.png", "application/octet-stream"),

@@ -1,7 +1,12 @@
-// Stores finished games sent by the page, in D1 (Cloudflare's SQLite), and
-// serves the MCP connector for playing against Claude (mcp.js).
+// Stores finished games sent by the page, in D1 (Cloudflare's SQLite), serves
+// the MCP connector for playing against Claude (mcp.js), and runs online games
+// between two people (online.js).
 //
 //   POST /games  {"id": "...", "moves": "1. A1 B2  2. C3", "result": "green", "mode": "ai", "date": "..."}
+//   POST /online/me    {"player": id, "key": key}                     -> {"rating", "provisional", "games"}
+//   POST /online/new   {"player": id, "key": key, "colour": "green"}  -> {"game": code}  (a friend game)
+//   GET  /online/queue?player=&key=        a WebSocket: wait for an opponent (a quick match)
+//   GET  /online/game/<code>?player=&key=  a WebSocket: play or watch a game
 //
 // Only the game is stored: no IP, no user ID. The rate limiter counts requests
 // per IP in memory and never stores the IP. The body is sent as text/plain, so
@@ -10,8 +15,10 @@
 import icon from './icon.svg';
 import iconPng from './icon.png';
 import { handleMcp } from './mcp.js';
+import { CODE_PATTERN, newCode, player, shown } from './online.js';
 
 export { Game } from './game.js';
+export { Lobby, Room } from './online.js';
 
 const RESULTS = ['green', 'red', 'draw'];
 const MODES = ['board', 'ai', 'analysis'];
@@ -26,10 +33,47 @@ function reply(status, text = '') {
   return new Response(text || null, { status, headers: CORS });
 }
 
+function json(value) {
+  return new Response(JSON.stringify(value), { headers: { ...CORS, 'Content-Type': 'application/json' } });
+}
+
+// The online routes. Each is limited per IP, like /games but looser: a game
+// makes a few requests, and a reconnect makes one more.
+async function online(request, env, pathname) {
+  const { success } = await env.ONLINE_LIMITER.limit({ key: request.headers.get('CF-Connecting-IP') || 'unknown' });
+  if (!success) return reply(429, 'too many requests: wait a minute');
+
+  if (pathname === '/online/queue') return env.LOBBY.get(env.LOBBY.idFromName('lobby')).fetch(request);
+  const game = /^\/online\/game\/([^/]+)$/.exec(pathname);
+  if (game) {
+    if (!CODE_PATTERN.test(game[1])) return reply(404, 'There is no such game.');
+    return env.ROOMS.get(env.ROOMS.idFromName(game[1])).fetch(request);
+  }
+  if (request.method !== 'POST' || !['/online/me', '/online/new'].includes(pathname)) return reply(404, 'not found');
+
+  let body;
+  try {
+    body = JSON.parse(await request.text());
+  } catch {
+    return reply(400, 'not JSON');
+  }
+  const me = await player(env, body.player, body.key);
+  if (!me) return reply(403, 'unknown player, or the wrong key');
+  if (pathname === '/online/me') return json({ ...shown(me), games: me.games });
+
+  const colour = body.colour === 'random' ? (Math.random() < 0.5 ? 'green' : 'red') : body.colour;
+  if (!['green', 'red'].includes(colour)) return reply(400, 'colour is green, red or random');
+  const code = newCode();
+  const seats = { green: null, red: null, [colour]: me };
+  await env.ROOMS.get(env.ROOMS.idFromName(code)).create(seats);
+  return json({ game: code });
+}
+
 export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
     if (pathname === '/mcp') return handleMcp(request, env);
+    if (pathname.startsWith('/online/')) return online(request, env, pathname);
     // The logo: Claude and its directory show the favicon of the server's address.
     if (request.method === 'GET' && pathname === '/icon.svg') {
       return new Response(icon, { headers: { ...CORS, 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' } });
