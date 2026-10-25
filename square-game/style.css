@@ -502,8 +502,561 @@ button[hidden] {
   margin: -4px 0 4px;
 }
 
-#side-select[hidden], #analysis[hidden] {
+#side-select[hidden], #analysis[hidden], #online[hidden] {
   display: none;
+}
+
+/* Online panel: the menu (rating, quick match, a friend game), the invite
+   link, or the two players of a game. */
+#online {
+  width: min(100%, var(--board-max));
+  margin: 0 0 8px;
+  padding: 8px;
+  background: var(--surface);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+#online [hidden] {
+  display: none;
+}
+
+#online p {
+  margin: 0 0 8px;
+}
+
+#online button {
+  margin: 0;
+}
+
+/* The menu sits on the page, not in the panel: the rating large, the slide,
+   and a friend game as a quiet link. */
+#online:has(> #online-menu:not([hidden])) {
+  background: none;
+  padding: 0;
+}
+
+#online-menu {
+  text-align: center;
+}
+
+#online-menu .your-rating {
+  margin-bottom: 4px;
+}
+
+#online-menu .slide-track {
+  margin-top: 10px;
+}
+
+#online-menu .your-rating .rating {
+  position: relative;
+  display: inline-block;
+  color: var(--text);
+  font-size: 2.4rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* The menu's "?" is a small help circle beside the number. */
+#online-menu .your-rating .mark {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  position: absolute;      /* out of the flow, so the digits alone are centred */
+  z-index: 2;
+  left: calc(100% + 8px);
+  top: calc(50% - 9px);
+  border: 1.5px solid var(--border);
+  border-radius: 50%;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+#online-menu .your-rating .mark:is(:hover, :focus) {
+  border-color: var(--muted);
+  color: var(--text);
+}
+
+#online-menu .your-rating .mark[hidden] {
+  display: none;
+}
+
+/* The Online tab with no game yet (online.js): nothing to show but the menu. */
+body.no-game :is(#board-area, #status, #controls, #move-list) {
+  display: none;
+}
+
+/* The menu's tip drops below the whole number. */
+#online-menu .rating .mark::after {
+  top: calc(100% + 16px);
+}
+
+/* A provisional rating's "?" explains itself on hover, or on a tap (focus). */
+.rating .mark {
+  position: relative;
+  cursor: help;
+  outline: none;
+}
+
+.rating .mark::after {
+  content: attr(data-tip);
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + 6px);
+  left: 50%;
+  font-family: system-ui, sans-serif;
+  width: max-content;
+  max-width: 14rem;
+  padding: 6px 9px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.3;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -4px);
+  transition: opacity calc(0.15s * var(--motion)), transform calc(0.3s * var(--motion)) var(--spring);
+}
+
+.rating .mark:hover::after,
+.rating .mark:focus::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* The rating over the last games (online.js drawHistory). */
+#online-menu .history {
+  display: block;
+  width: 120px;
+  height: 24px;
+  margin: 2px auto 0;
+  overflow: visible;
+}
+
+#online-menu .history[hidden] {
+  display: none;
+}
+
+#online-menu .history polyline {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+#online-menu .history circle {
+  fill: var(--button);
+}
+
+/* Slide to start a quick match: the knob springs back unless dragged to the
+   end, and a tint fills the track behind it. Searching, the knob rests at the
+   end with a radar pulse and becomes Stop. */
+.slide-track {
+  --x: 0px;
+  --progress: 0;
+  --knob: 40px;
+  position: relative;
+  height: calc(var(--knob) + 8px);
+  border-radius: 999px;
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(100%, 250px);
+  margin: 0 auto;
+  padding: 0 calc(var(--knob) + 12px);    /* both sides, so the label is centred */
+  user-select: none;
+}
+
+.slide-track::before {
+  content: '';
+  position: absolute;
+  inset: 4px auto 4px 4px;
+  width: calc(var(--knob) + var(--x));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--button) 25%, transparent);
+  transition: width calc(0.5s * var(--motion)) var(--spring);
+}
+
+.slide-track.dragging::before {
+  transition: none;
+}
+
+/* The label shimmers, like the old iPhone's slide to unlock, and fades as the knob comes. */
+.slide-label {
+  font-weight: 600;
+  color: transparent;
+  background: linear-gradient(100deg, var(--muted) 40%, var(--text) 50%, var(--muted) 60%) 0 0 / 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  opacity: calc(1 - var(--progress) * 1.4);
+  animation: shimmer calc(3.2s * var(--motion)) linear infinite;
+}
+
+@keyframes shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -150% 0; }
+}
+
+.slide-track .slide-knob {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: var(--knob);
+  height: var(--knob);
+  padding: 0;
+  border-radius: 50%;
+  line-height: 0;
+  touch-action: none;
+  cursor: grab;
+  transform: translateX(var(--x));
+  transition: transform calc(0.5s * var(--motion)) var(--spring),
+              left calc(0.5s * var(--motion)) var(--spring);
+}
+
+.slide-track.dragging .slide-knob {
+  transition: none;
+  cursor: grabbing;
+}
+
+.slide-knob svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
+
+.slide-knob .stop,
+.searching .slide-knob .go {
+  display: none;
+}
+
+.searching .slide-knob .stop {
+  display: inline;
+}
+
+.slide-track.searching::before {
+  width: auto;
+  right: 4px;
+}
+
+.searching .slide-label {
+  opacity: 1;
+}
+
+.searching .slide-knob {
+  left: calc(100% - var(--knob) - 4px);
+  transform: none;
+  cursor: pointer;
+}
+
+.searching .slide-knob::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--button);
+  animation: radar calc(1.6s * var(--motion)) ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes radar {
+  to { transform: scale(2); opacity: 0; }
+}
+
+#play-friend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 6px 10px;
+  background: none;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+#play-friend svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+#play-friend:hover:not(:disabled) {
+  background: none;
+  color: var(--text);
+}
+
+#play-friend:disabled {
+  opacity: 0.4;
+}
+
+/* The invite: the link is a button that copies itself. Its copy icon
+   shrinks away as a tick springs in, and Copy becomes Copied. */
+#online-invite .link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+#online-invite .link:hover {
+  background: var(--border);
+}
+
+#online-invite .url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, monospace;
+}
+
+#online-invite .icons {
+  display: grid;
+  flex: none;
+}
+
+#online-invite .icons svg {
+  grid-area: 1 / 1;
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  transition: transform calc(0.4s * var(--motion)) var(--spring),
+              opacity calc(0.2s * var(--motion));
+}
+
+#online-invite .done-icon,
+#online-invite .copied .copy-icon {
+  transform: scale(0.5);
+  opacity: 0;
+}
+
+#online-invite .copied .done-icon {
+  transform: none;
+  opacity: 1;
+  fill: var(--button);
+}
+
+#online-invite .label {
+  flex: none;
+  min-width: 3.6em;          /* Copy and Copied take the same room */
+  color: var(--muted);
+}
+
+#online .waiting {
+  margin: 0;
+}
+
+/* Three dots that bounce in turn, like someone typing. */
+.dots i {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin-left: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: dot calc(1.2s * var(--motion)) infinite;
+}
+
+.dots i:nth-child(2) { animation-delay: calc(0.15s * var(--motion)); }
+.dots i:nth-child(3) { animation-delay: calc(0.3s * var(--motion)); }
+
+@keyframes dot {
+  0%, 60%, 100% { transform: none; }
+  30% { transform: translateY(-4px); }
+}
+
+/* The players: you on the left, the opponent on the right. A pill glides
+   behind whoever is to move. */
+#players {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+#players .turn {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(50% - 3px);
+  border-radius: 4px;
+  background: var(--surface-2);
+  transition: transform calc(0.5s * var(--motion)) var(--spring),
+              opacity calc(0.3s * var(--motion));
+}
+
+#players.second .turn {
+  transform: translateX(calc(100% + 6px));
+}
+
+#players.no-turn .turn {
+  opacity: 0;
+}
+
+.player {
+  position: relative;      /* above the pill */
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 6px 8px;
+}
+
+.player .swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.player[data-colour="green"] .swatch { background: var(--green); }
+.player[data-colour="red"] .swatch { background: var(--red); }
+
+.player .who {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player .delta {
+  font-size: 0.75rem;
+}
+
+.player .delta:empty {
+  display: none;
+}
+
+.player .delta.up { color: var(--green-bright); }
+.player .delta.down { color: var(--red-bright); }
+
+/* A player who has gone (closed the page, lost the network) dims. */
+.player {
+  transition: opacity calc(0.3s * var(--motion));
+}
+
+.player.away {
+  opacity: 0.45;
+}
+
+.player.away .who::after {
+  content: ' (away)';
+}
+
+/* A rating as an odometer: each digit a reel of 0-9 that rolls into place. */
+.rating {
+  flex: none;
+  white-space: nowrap;
+}
+
+.rating .digit {
+  display: inline-block;
+  height: 1.25em;
+  line-height: 1.25em;
+  overflow: hidden;
+  vertical-align: bottom;
+}
+
+.rating .reel {
+  display: block;
+  width: 1ch;
+  white-space: normal;     /* one digit per line */
+  transform: translateY(calc(var(--d, 0) * -1.25em));
+  transition: transform calc(0.8s * var(--motion)) var(--spring);
+}
+
+/* Hold to resign: a red fill sweeps across while the button is held. */
+#resign {
+  position: relative;
+  overflow: hidden;
+}
+
+#resign::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--red);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform calc(0.2s * var(--motion));
+}
+
+#resign.holding::before {
+  transform: none;
+  transition: transform 1s linear;     /* HOLD_MS in online.js */
+}
+
+#resign svg {
+  position: relative;
+}
+
+/* The snackbar under the controls: requests, a player who left, errors. */
+#snackbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(100%, var(--board-max));
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  font-size: 0.85rem;
+  text-align: left;
+  transition: transform calc(0.4s * var(--motion)) var(--spring),
+              opacity calc(0.2s * var(--motion));
+}
+
+#snackbar:not(.shown) {
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(-6px);
+  position: absolute;      /* takes no room while hidden */
+}
+
+#snackbar span {
+  flex: 1;
+}
+
+#snackbar button {
+  margin: 0;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+}
+
+#snackbar .ring {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  transform: rotate(-90deg);
+}
+
+#snackbar .ring circle {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-dasharray: 100;
+  animation: ring var(--left) linear forwards;
+}
+
+@keyframes ring {
+  to { stroke-dashoffset: 100; }
 }
 
 /* Analysis panel: the top lines, best first, scores for Green like lichess's White.
@@ -717,6 +1270,14 @@ button[hidden] {
 
 #mode-select .tab.active {
   color: #fff;
+}
+
+/* Four tabs on a 360px phone: a little tighter. */
+@media (max-width: 420px) {
+  #mode-select .tab {
+    padding: 8px 9px;
+    font-size: 12px;
+  }
 }
 
 /* Board with the analysis eval bar to its right */

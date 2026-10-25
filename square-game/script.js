@@ -28,7 +28,7 @@ const COLOURS = ['W', 'B'];            // player 0 is green (W), player 1 is red
 const COLUMN_LABELS = 'ABCDEFGHIJ';     // columns are lettered, rows numbered from the top
 
 let ai = null;                         // the module's exports, once loaded
-let mode = 'board';                    // 'board' (two humans), 'ai', or 'analysis'
+let mode = 'board';                    // 'board' (two humans), 'ai', 'analysis', or 'online' (online.js)
 let aiPlayer = 1;                      // which side the AI plays in AI mode (0 = green, first)
 let analysisGeneration = 0;            // bumped whenever the position or mode changes
 
@@ -89,11 +89,16 @@ function createColoredStatus(player, isWinner = false) {
 }
 
 function gameOver() {
-  return ai.winner() >= 0 || ai.draw() === 1;
+  return ai.winner() >= 0 || ai.draw() === 1 || onlineOver();
 }
 
 function isAITurn() {
   return mode === 'ai' && !gameOver() && ai.current_player() === aiPlayer;
+}
+
+// The player cannot move now: the AI is about to, or it is not their turn online.
+function waitingForOther() {
+  return isAITurn() || onlineWaiting();
 }
 
 // Square index -> "C3": columns lettered, rows numbered from 1 at the top.
@@ -173,7 +178,8 @@ function renderMoves() {
 // Redraw everything from the module's state.
 function render() {
   const boards = [ai.board(0), ai.board(1)];
-  const winner = ai.winner();
+  // Online, a game can also end by resigning or leaving, which the engine cannot see.
+  const winner = ai.winner() < 0 && ai.draw() !== 1 && onlineOver() ? onlineWinner() : ai.winner();
   const winMask = ai.winning_mask();
   const over = gameOver();
 
@@ -224,18 +230,25 @@ function render() {
       statusEl.innerHTML += ' <small>(position repeated; a third time is a draw)</small>';
     }
   }
-  playAgainButton.hidden = !over;
-  // No taking back while the AI is about to move.
-  const waiting = isAITurn();
-  undoButton.disabled = waiting || ai.move_count() === 0;
-  redoButton.disabled = waiting || ai.redo_count() === 0;
+  if (mode === 'online') statusEl.innerHTML += onlineStatusNote();
+  playAgainButton.hidden = !over || (mode === 'online' && !onlineCanRematch());
+  playAgainButton.textContent = mode === 'online' ? 'Rematch' : 'Play Again';
+  // No taking back while the AI is about to move. Online, undo asks the
+  // opponent to take back your last move, and nothing else edits the game.
+  const waiting = waitingForOther();
+  const isOnline = mode === 'online';
+  undoButton.disabled = isOnline ? !onlineCanUndo() : waiting || ai.move_count() === 0;
+  redoButton.disabled = isOnline || waiting || ai.redo_count() === 0;
   copyButton.disabled = ai.move_count() === 0;
-  pasteButton.disabled = waiting;
-  hintButton.hidden = mode === 'analysis';
+  pasteButton.disabled = isOnline || waiting;
+  redoButton.hidden = pasteButton.hidden = isOnline;   // online, only undo edits the game (by asking)
+  hintButton.hidden = mode === 'analysis' || isOnline;
   hintButton.disabled = waiting || over;
   renderMoves();
-  if (over) saveFinishedGame();
+  // Online, the server's result (with the ratings) may come after the board shows the win.
+  if (over && (mode !== 'online' || onlineOver())) saveFinishedGame();
   renderPastGames();
+  renderOnline();
   boardEl.classList.remove('thinking');
   startAnalysis();                     // no-op unless in analysis mode
 }
@@ -253,7 +266,7 @@ function animate(cell, name, step = 0) {
 function showPreview(index) {
   clearPreview();
   const occupied = ai ? ai.board(0) | ai.board(1) : 0;
-  if (!ai || isAITurn() || gameOver() || occupied & (1 << index)) {
+  if (!ai || waitingForOther() || gameOver() || occupied & (1 << index)) {
     hideFrame();
     return;
   }
@@ -714,6 +727,7 @@ function requestAIMove() {
 }
 
 function onCellClick(row, col) {
+  if (ai && mode === 'online') return onlineClick(row, col);
   if (!ai || isAITurn()) return;       // not loaded yet, or waiting for the AI
   if (!ai.play(row, col)) return;      // occupied, or game over
   logMoves();
@@ -723,6 +737,7 @@ function onCellClick(row, col) {
 
 // Against the AI, take back the AI's reply too so it is the human's move again.
 function onUndo() {
+  if (ai && mode === 'online') return onlineUndo();
   if (!ai || isAITurn()) return;
   if (!ai.undo()) return;
   if (mode === 'ai' && ai.current_player() === aiPlayer) ai.undo();
@@ -731,7 +746,7 @@ function onUndo() {
 }
 
 function onRedo() {
-  if (!ai || isAITurn()) return;
+  if (!ai || isAITurn() || mode === 'online') return;
   if (!ai.redo()) return;
   if (mode === 'ai' && ai.current_player() === aiPlayer && ai.redo_count() > 0) ai.redo();
   render();
@@ -750,7 +765,7 @@ function onCopyMoves() {
 
 // Highlight the square the engine would play, without playing it.
 function onHint() {
-  if (!ai || isAITurn() || gameOver()) return;
+  if (!ai || isAITurn() || gameOver() || mode === 'online') return;
   hintButton.disabled = true;
   const snapshot = moveText();
   askEngine('move', AI_MAX_DEPTH, AI_NODE_BUDGET).then(({ index }) => {
@@ -777,7 +792,7 @@ function parseMoves(text) {
 
 // Start a new game from a pasted move list (the format "Copy moves" produces).
 function onPasteMoves() {
-  if (!ai || isAITurn()) return;
+  if (!ai || isAITurn() || mode === 'online') return;
   const text = window.prompt('Paste moves, e.g. "1. C3 A1  2. B2 D4":');
   if (text === null) return;
   const moves = parseMoves(text);
@@ -818,7 +833,7 @@ function loadMoves(moves) {
 const PAST_GAMES = 100;
 const GAMES_URL = 'https://cts.guppy16.workers.dev/games';
 const PAST_GAMES_KEY = 'cts:games';
-const MODE_NAMES = { board: 'Over the board', ai: 'Against AI', analysis: 'Analysis' };
+const MODE_NAMES = { board: 'Over the board', ai: 'Against AI', analysis: 'Analysis', online: 'Online' };
 
 function readPastGames() {
   let text;
@@ -856,16 +871,18 @@ function saveFinishedGame() {
   const moves = moveText();
   const games = readPastGames();
   if (games.some(game => game.moves === moves)) return;   // render() runs often once a game is over
-  const winner = ai.winner();
+  // Online, the result may be a resignation, and the server has stored the game already.
+  const winner = ai.winner() < 0 && onlineOver() ? onlineWinner() : ai.winner();
   games.unshift({
     id: crypto.randomUUID(),
-    sent: false,
+    sent: mode === 'online',
     moves,
     result: winner === 0 ? 'green' : winner === 1 ? 'red' : 'draw',
     mode,
     boards: [ai.board(0), ai.board(1)],
     last: [0, 1].map(k => ai.move_count() - 1 - k).filter(p => p >= 0).map(p => ai.move_at(p)),
     date: new Date().toISOString(),
+    rating: mode === 'online' ? onlineRatingBefore() : undefined,   // yours, going into the game
   });
   writePastGames(games);
   sendNextGame();
@@ -935,6 +952,7 @@ function setMode(next) {
   placePill();
   sideSelect.hidden = mode !== 'ai';
   if (!ai) return;
+  if (mode === 'online') onlineEnter();
   render();
   if (isAITurn()) requestAIMove();
 }
@@ -1000,7 +1018,8 @@ aiFirstBox.addEventListener('change', () => {
 });
 
 playAgainButton.addEventListener('click', () => {
-  if (ai) newGame();
+  if (ai && mode === 'online') onlineRematch();
+  else if (ai) newGame();
 });
 
 undoButton.addEventListener('click', onUndo);
@@ -1015,6 +1034,7 @@ async function loadAI() {
   ai = instance.exports;
   newGame();
   sendNextGame();
+  onlineFromUrl();                     // a link to an online game opens it
 }
 
 buildBoard();
