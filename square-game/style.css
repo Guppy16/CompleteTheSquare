@@ -57,6 +57,48 @@ h1 {
   line-height: 1.2;
 }
 
+/* The title is "cts": the rest of each word folds away, and opens again on
+   hover, focus or a tap (script.js). A tail is a one-column grid whose column
+   animates between 0fr and 1fr, so it springs to its real width. */
+#title {
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#title .tail {
+  display: inline-grid;
+  grid-template-columns: 0fr;
+  opacity: 0;
+  vertical-align: bottom;
+  transition: grid-template-columns calc(0.6s * var(--motion)) var(--spring),
+              opacity calc(0.3s * var(--motion));
+}
+
+#title .tail > span {
+  overflow: hidden;
+  white-space: pre;
+}
+
+#title .tail:nth-of-type(2) { transition-delay: calc(0.04s * var(--motion)); }
+#title .tail:nth-of-type(3) { transition-delay: calc(0.08s * var(--motion)); }
+
+#title.open .tail,
+#title:focus-visible .tail {
+  grid-template-columns: 1fr;
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  #title:hover .tail {
+    grid-template-columns: 1fr;
+    opacity: 1;
+  }
+}
+
 #board {
   display: grid;
   /* row numbers on the left, one column per square, and an equal empty
