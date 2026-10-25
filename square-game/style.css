@@ -460,7 +460,41 @@ button[hidden] {
 }
 
 #move-list .plies {
-  min-width: 3.4em;
+  min-width: 4.2em;
+}
+
+/* Each move is a button that shows its position; the one shown is lit. */
+#move-list .ply {
+  margin: 0 1px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+
+#move-list .ply:hover:not(.current) {
+  background: var(--surface-2);
+}
+
+#move-list .ply.current {
+  background: var(--button);
+  color: white;
+}
+
+/* A variation: under the move it replaces, indented by how deep it is, its
+   moves in one wrapping line. */
+#move-list .variation {
+  margin-left: calc(2.4em + (var(--depth) - 1) * 0.9em);
+  padding-left: 6px;
+  border-left: 2px solid var(--border);
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: normal;
+}
+
+#move-list .variation .ply.current {
+  color: white;
 }
 
 /* Tiny picture of the position after each move; the two squares just

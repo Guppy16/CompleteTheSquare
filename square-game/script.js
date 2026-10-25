@@ -92,8 +92,9 @@ function gameOver() {
   return ai.winner() >= 0 || ai.draw() === 1 || onlineOver();
 }
 
+// The AI moves when it is its turn at the end of the line (not while you look back).
 function isAITurn() {
-  return mode === 'ai' && !gameOver() && ai.current_player() === aiPlayer;
+  return mode === 'ai' && !gameOver() && ai.current_player() === aiPlayer && current.children.length === 0;
 }
 
 // The player cannot move now: the AI is about to, or it is not their turn online.
@@ -106,26 +107,83 @@ function squareName(index) {
   return COLUMN_LABELS[index % BOARD_SIZE] + (Math.floor(index / BOARD_SIZE) + 1);
 }
 
-// The moves so far as numbered pairs: ["1. C3 A1", "2. B2 D4", "3. E5"].
-function movePairs() {
-  const pairs = [];
-  const count = ai.move_count();
-  for (let i = 0; i < count; i += 2) {
-    let pair = `${i / 2 + 1}. ${squareName(ai.move_at(i))}`;
-    if (i + 1 < count) pair += ` ${squareName(ai.move_at(i + 1))}`;
-    pairs.push(pair);
+// --- The moves: a tree ------------------------------------------------------
+//
+// Each move played is a node holding its square and the boards after it; a
+// node's children are the moves tried next, the first one the main line. The
+// engine always holds the path to `current`, so going to another move is
+// undoing to where the paths part and playing on. In the Analysis tab another
+// move from a position adds a variation; elsewhere it replaces what followed.
+const root = { square: -1, boards: [0, 0], winner: -1, children: [], parent: null };
+let current = root;
+
+function pathTo(node) {
+  const path = [];
+  for (let n = node; n.parent; n = n.parent) path.push(n);
+  return path.reverse();
+}
+
+// The line through `current`: the path to it, then the main line on from it.
+function line() {
+  const nodes = pathTo(current);
+  for (let n = current; n.children.length > 0; ) nodes.push(n = n.children[0]);
+  return nodes;
+}
+
+// The node `square` makes after `parent`, its boards worked out without the engine.
+function childOf(parent, square) {
+  const mover = pathTo(parent).length % 2;          // Green moves on even plies
+  const boards = [0, 1].map(p => ai.board_after(parent.boards[0], parent.boards[1], mover, square, p));
+  if (boards[0] === parent.boards[0] && boards[1] === parent.boards[1]) {
+    throw new Error(`${squareName(square)} is not a legal move here`);
   }
-  return pairs;
+  return { square, boards, winner: -1, children: [], parent };   // online: the server says who won
 }
 
+// Put the engine at `node`.
+function goTo(node) {
+  const path = pathTo(node);
+  let same = 0;
+  while (same < ai.move_count() && same < path.length && ai.move_at(same) === path[same].square) same++;
+  while (ai.move_count() > same) ai.undo();
+  for (const { square } of path.slice(same)) {
+    if (!ai.play(Math.floor(square / BOARD_SIZE), square % BOARD_SIZE)) throw new Error(`could not replay ${squareName(square)}`);
+  }
+  current = node;
+}
+
+// Play `square` from the current position; false if it cannot be played.
+function playMove(square) {
+  if (!ai.play(Math.floor(square / BOARD_SIZE), square % BOARD_SIZE)) return false;
+  let node = current.children.find(child => child.square === square);
+  if (!node) {
+    node = { square, boards: [ai.board(0), ai.board(1)], winner: ai.winner(), children: [], parent: current };
+    if (mode === 'analysis') current.children.push(node);
+    else current.children = [node];
+  }
+  current = node;
+  return true;
+}
+
+// An empty board, and no moves.
+function clearMoves() {
+  ai.reset();
+  root.children = [];
+  current = root;
+}
+
+// The moves as numbered pairs: "1. C3 A1  2. B2 D4  3. E5".
+function movesText(nodes) {
+  const pairs = [];
+  for (let i = 0; i < nodes.length; i += 2) {
+    pairs.push(`${i / 2 + 1}. ${nodes.slice(i, i + 2).map(n => squareName(n.square)).join(' ')}`);
+  }
+  return pairs.join('  ');
+}
+
+// The moves to the current position, which the engine is answering for.
 function moveText() {
-  return movePairs().join('  ');
-}
-
-// A tiny picture of the position after `ply` half-moves, with the squares
-// of the plies in `lastMoves` in the brighter shade.
-function miniBoard(ply, lastMoves) {
-  return miniBoardOf([ai.board_at(ply, 0), ai.board_at(ply, 1)], lastMoves);
+  return movesText(pathTo(current));
 }
 
 function miniBoardOf(boards, lastMoves) {
@@ -143,36 +201,66 @@ function miniBoardOf(boards, lastMoves) {
   return mini;
 }
 
-// One entry per move (a pair of plies, one per side): "3. C3 D4" followed by
-// the position after them.
+// The main line, a row per move (a pair of plies) with the position after it
+// and, in analysis, its score. A variation hangs under the row of the move it
+// replaces, its moves in a line, nested ones below it. Every move is a button
+// that goes to its position.
 function renderMoves() {
   moveListEl.innerHTML = '';
-  const count = ai.move_count();
-  moveListEl.hidden = count === 0;     // nothing to show before the first move
-  if (count === 0) return;
-  for (let i = 0; i < count; i += 2) {
-    const plies = [i, i + 1].filter(p => p < count);
-    const squares = plies.map(p => ai.move_at(p));
-
-    const pair = document.createElement('span');
-    pair.classList.add('pair');
+  moveListEl.hidden = root.children.length === 0;
+  const mainLine = [];
+  for (let n = root; n.children.length > 0; ) mainLine.push(n = n.children[0]);
+  for (let i = 0; i < mainLine.length; i += 2) {
+    const plies = mainLine.slice(i, i + 2);
+    const row = document.createElement('div');
+    row.classList.add('pair');
     const number = document.createElement('span');
     number.classList.add('num');
     number.textContent = `${i / 2 + 1}.`;
     const text = document.createElement('span');
     text.classList.add('plies');
-    text.textContent = squares.map(squareName).join(' ');
-    pair.append(number, text, miniBoard(plies.length + i, squares));
-    // In analysis: the evaluation after this move, once the game has been scored.
-    const evalScore = gameScores.get(plies.length + i);
-    if (mode === 'analysis' && evalScore !== undefined) {
+    text.append(...plies.map(node => plyButton(node)));
+    const end = plies.at(-1);
+    row.append(number, text, miniBoardOf(end.boards, plies.map(n => n.square)));
+    const score = gameScores.get(pathKey(end));
+    if (mode === 'analysis' && score !== undefined) {
       const evalEl = document.createElement('span');
       evalEl.classList.add('eval');
-      evalEl.textContent = scoreText(evalScore);
-      pair.appendChild(evalEl);
+      evalEl.textContent = scoreText(score);
+      row.appendChild(evalEl);
     }
-    moveListEl.appendChild(pair);
+    moveListEl.appendChild(row);
+    for (const node of plies) {
+      for (const alternative of node.parent.children.slice(1)) moveListEl.append(...variationRows(alternative, 1));
+    }
   }
+  moveListEl.querySelector('.current')?.scrollIntoView({ block: 'nearest' });
+}
+
+// A move as a button: "C3", or in a variation with its number, "2. C3" or "2… A1".
+function plyButton(node, numbered = false) {
+  const button = document.createElement('button');
+  button.classList.add('ply');
+  button.classList.toggle('current', node === current);
+  const ply = pathTo(node).length - 1;
+  const number = ply % 2 === 0 ? `${ply / 2 + 1}. ` : `${(ply + 1) / 2}… `;
+  button.textContent = (numbered ? number : '') + squareName(node.square);
+  button.addEventListener('click', () => jumpTo(node));
+  return button;
+}
+
+// A variation from `first`: one row of its moves (numbered on Green's, and
+// on the first), then rows for the variations inside it, a step further in.
+function variationRows(first, depth) {
+  const row = document.createElement('div');
+  row.classList.add('variation');
+  row.style.setProperty('--depth', depth);
+  const nested = [];
+  for (let n = first; n; n = n.children[0]) {
+    row.appendChild(plyButton(n, n === first || pathTo(n).length % 2 === 1));
+    nested.push(...n.children.slice(1));
+  }
+  return [row, ...nested.flatMap(n => variationRows(n, depth + 1))];
 }
 
 // Redraw everything from the module's state.
@@ -215,8 +303,7 @@ function render() {
       }
     });
   });
-  const count = ai.move_count();
-  if (count > 0) cells[ai.move_at(count - 1)].classList.add('last');
+  if (current !== root) cells[current.square].classList.add('last');
   showWin(winMask, newWin);
   hideFrame();                         // the hovered square may just have been played
 
@@ -231,17 +318,19 @@ function render() {
     }
   }
   if (mode === 'online') statusEl.innerHTML += onlineStatusNote();
-  playAgainButton.hidden = !over || (mode === 'online' && !onlineCanRematch());
+  const ahead = line().length - pathTo(current).length;
+  if (ahead > 0) statusEl.innerHTML += ` <small>(${ahead} move${ahead > 1 ? 's' : ''} back)</small>`;
+  playAgainButton.hidden = !over || mode === 'analysis' || (mode === 'online' && !onlineCanRematch());
   playAgainButton.textContent = mode === 'online' ? 'Rematch' : 'Play Again';
-  // No taking back while the AI is about to move. Online, undo asks the
-  // opponent to take back your last move, and nothing else edits the game.
-  const waiting = waitingForOther();
+  // Back and forward move through the moves; not while the AI is about to
+  // move. Online they only look back: a take-back is asked for (online.js).
   const isOnline = mode === 'online';
-  undoButton.disabled = isOnline ? !onlineCanUndo() : waiting || ai.move_count() === 0;
-  redoButton.disabled = isOnline || waiting || ai.redo_count() === 0;
-  copyButton.disabled = ai.move_count() === 0;
-  pasteButton.disabled = isOnline || waiting;
-  redoButton.hidden = pasteButton.hidden = isOnline;   // online, only undo edits the game (by asking)
+  const waiting = isAITurn();
+  undoButton.disabled = waiting || current === root;
+  redoButton.disabled = waiting || current.children.length === 0;
+  copyButton.disabled = root.children.length === 0;
+  pasteButton.disabled = isOnline || waitingForOther();
+  pasteButton.hidden = isOnline;
   hintButton.hidden = mode === 'analysis' || isOnline;
   hintButton.disabled = waiting || over;
   renderMoves();
@@ -377,9 +466,7 @@ if (engineWorker) {
 }
 
 function askEngine(kind, maxDepth, nodeBudget) {
-  const moves = [];
-  for (let i = 0; i < ai.move_count(); i++) moves.push(ai.move_at(i));
-  return askEngineAt(moves, kind, maxDepth, nodeBudget);
+  return askEngineAt(pathTo(current).map(n => n.square), kind, maxDepth, nodeBudget);
 }
 
 // The same for the position after the given moves (used to score a whole
@@ -624,35 +711,32 @@ function renderAnalysis(lines, depth, settled, book = -1) {
 // Scores after each move of the game, for the move list (like lichess's
 // computer analysis). Cached by the move prefix so only new positions are
 // scored when the game grows; a quick search per position.
-const gameScores = new Map();          // ply -> score for Green after that many moves
-let gameScoresPrefix = [];             // the moves those scores belong to
+const gameScores = new Map();          // the moves to a position, joined -> score for Green there
 
+function pathKey(node) {
+  return pathTo(node).map(n => n.square).join(',');
+}
+
+// Score every position along the line through the current move, one at a
+// time, keeping the scores of positions met before.
 function evaluateGame() {
-  const moves = [];
-  for (let i = 0; i < ai.move_count(); i++) moves.push(ai.move_at(i));
-  // Keep cached scores while the game's moves still match.
-  let same = 0;
-  while (same < moves.length && same < gameScoresPrefix.length && moves[same] === gameScoresPrefix[same]) same++;
-  for (const ply of Array.from(gameScores.keys())) if (ply > same) gameScores.delete(ply);
-  gameScoresPrefix = moves;
-
+  const nodes = line();
   const generation = analysisGeneration;
-  const pending = [];
-  for (let ply = 1; ply <= moves.length; ply++) if (!gameScores.has(ply)) pending.push(ply);
+  const pending = nodes.filter(n => !gameScores.has(pathKey(n)));
   const next = () => {
     if (generation !== analysisGeneration || pending.length === 0) return;
-    const ply = pending.shift();
-    if (ply === moves.length && gameOver()) {   // the final position needs no search
-      const winner = ai.winner();
-      gameScores.set(ply, winner < 0 ? 0 : winner === 0 ? 1 : -1);
+    const node = pending.shift();
+    const moves = pathTo(node).map(n => n.square);
+    if (node.winner >= 0) {            // a finished game: the engine would say 0
+      gameScores.set(moves.join(','), node.winner === 0 ? 1 : -1);
       renderMoves();
       next();
       return;
     }
-    askEngineAt(moves.slice(0, ply), 'evaluate', AI_MAX_DEPTH, EVALUATE_BUDGET).then(({ score }) => {
+    askEngineAt(moves, 'evaluate', AI_MAX_DEPTH, EVALUATE_BUDGET).then(({ score }) => {
       if (generation !== analysisGeneration) return;
-      const toMove = ply % 2;          // after an odd number of moves, red is to move
-      gameScores.set(ply, toMove === 0 ? score : -score);
+      const toMove = moves.length % 2;  // after an odd number of moves, red is to move
+      gameScores.set(moves.join(','), toMove === 0 ? score : -score);
       renderMoves();
       next();
     });
@@ -714,7 +798,7 @@ function requestAIMove() {
       return;
     }
     leaveCandidates(index);
-    if (!ai.play(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE)) {
+    if (!playMove(index)) {
       throw new Error(`the AI chose an illegal square, ${squareName(index)}`);
     }
     console.log(`AI played ${squareName(index)} in ${ms} ms`);
@@ -729,33 +813,41 @@ function requestAIMove() {
 function onCellClick(row, col) {
   if (ai && mode === 'online') return onlineClick(row, col);
   if (!ai || isAITurn()) return;       // not loaded yet, or waiting for the AI
-  if (!ai.play(row, col)) return;      // occupied, or game over
+  if (mode === 'ai' && ai.current_player() === aiPlayer) return;   // looking back at the AI's move
+  if (!playMove(row * BOARD_SIZE + col)) return;   // occupied, or game over
   logMoves();
   render();
   if (isAITurn()) requestAIMove();
 }
 
-// Against the AI, take back the AI's reply too so it is the human's move again.
+// Back a move. Against the AI, back to your own move, so that you can play another.
 function onUndo() {
-  if (ai && mode === 'online') return onlineUndo();
-  if (!ai || isAITurn()) return;
-  if (!ai.undo()) return;
-  if (mode === 'ai' && ai.current_player() === aiPlayer) ai.undo();
+  if (!ai || isAITurn() || current === root) return;
+  goTo(current.parent);
+  if (mode === 'ai' && ai.current_player() === aiPlayer && current !== root) goTo(current.parent);
   render();
   if (isAITurn()) requestAIMove();     // never leave the game waiting on the AI
 }
 
 function onRedo() {
-  if (!ai || isAITurn() || mode === 'online') return;
-  if (!ai.redo()) return;
-  if (mode === 'ai' && ai.current_player() === aiPlayer && ai.redo_count() > 0) ai.redo();
+  if (!ai || isAITurn() || current.children.length === 0) return;
+  goTo(current.children[0]);
+  if (mode === 'ai' && ai.current_player() === aiPlayer && current.children.length > 0) goTo(current.children[0]);
+  render();
+  if (isAITurn()) requestAIMove();
+}
+
+// A move clicked in the move list: its position.
+function jumpTo(node) {
+  if (!ai || isAITurn()) return;
+  goTo(node);
   render();
   if (isAITurn()) requestAIMove();
 }
 
 function onCopyMoves() {
   if (!ai) return;
-  const text = moveText();
+  const text = movesText(line());
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
   } else {
@@ -805,9 +897,9 @@ function onPasteMoves() {
 
 // Start a new game from a list of [row, col] moves.
 function loadMoves(moves) {
-  ai.reset();
+  clearMoves();
   for (const [i, [row, col]] of moves.entries()) {
-    if (!ai.play(row, col)) {
+    if (!playMove(row * BOARD_SIZE + col)) {
       render();
       statusEl.textContent = `Move ${i + 1} (${squareName(row * BOARD_SIZE + col)}) is not legal here; stopped before it.`;
       return;
@@ -867,8 +959,10 @@ async function sendNextGame() {
   writePastGames(readPastGames().map(g => (g.id === id ? { ...g, sent: true } : g)));
 }
 
+// The whole line is saved, wherever in it you are looking.
 function saveFinishedGame() {
-  const moves = moveText();
+  const nodes = line();
+  const moves = movesText(nodes);
   const games = readPastGames();
   if (games.some(game => game.moves === moves)) return;   // render() runs often once a game is over
   // Online, the result may be a resignation, and the server has stored the game already.
@@ -879,8 +973,8 @@ function saveFinishedGame() {
     moves,
     result: winner === 0 ? 'green' : winner === 1 ? 'red' : 'draw',
     mode,
-    boards: [ai.board(0), ai.board(1)],
-    last: [0, 1].map(k => ai.move_count() - 1 - k).filter(p => p >= 0).map(p => ai.move_at(p)),
+    boards: (nodes.at(-1) ?? root).boards,   // a game resigned before a move: the empty board
+    last: nodes.slice(-2).map(n => n.square),
     date: new Date().toISOString(),
     rating: mode === 'online' ? onlineRatingBefore() : undefined,   // yours, going into the game
   });
@@ -933,7 +1027,7 @@ function fallbackCopy(text) {
 }
 
 function newGame() {
-  ai.reset();
+  clearMoves();
   render();
   if (isAITurn()) requestAIMove();     // the AI opens when it plays first
 }
@@ -1024,6 +1118,12 @@ playAgainButton.addEventListener('click', () => {
 
 undoButton.addEventListener('click', onUndo);
 redoButton.addEventListener('click', onRedo);
+// The arrow keys move back and forward too, as on lichess.
+document.addEventListener('keydown', event => {
+  if (event.target.closest('input, textarea, [role="tablist"]') || event.altKey || event.ctrlKey || event.metaKey) return;
+  if (event.key === 'ArrowLeft') onUndo();
+  else if (event.key === 'ArrowRight') onRedo();
+});
 copyButton.addEventListener('click', onCopyMoves);
 pasteButton.addEventListener('click', onPasteMoves);
 hintButton.addEventListener('click', onHint);

@@ -40,6 +40,7 @@ const linkLabelEl = linkButton.querySelector('.label');
 const playersEl = document.getElementById('players');
 const playerEls = Array.from(playersEl.querySelectorAll('.player'));
 const resignButton = document.getElementById('resign');
+const takeBackButton = document.getElementById('take-back');
 const quickAgainButton = document.getElementById('quick-again');
 const snackbarEl = document.getElementById('snackbar');
 
@@ -78,9 +79,11 @@ const opposite = colour => (colour === 'green' ? 'red' : 'green');
 
 // --- Hooks for script.js -------------------------------------------------------
 
-// The player may not move: no game, the opponent's move, or the game is over.
+// The player may not move: no game, the opponent's move, the game is over,
+// or they are looking back at an earlier move.
 function onlineWaiting() {
   if (mode !== 'online') return false;
+  if (current.children.length > 0) return true;
   const s = online.state;
   if (online.view !== 'game' || !s?.you || s.over) return true;
   if (!s.players[opposite(s.you)]) return true;                 // the friend has not joined
@@ -122,14 +125,10 @@ function onlineCanRematch() {
 
 function onlineClick(row, col) {
   if (onlineWaiting()) return;
-  if (!ai.play(row, col)) return;      // occupied: nothing to send
+  if (!playMove(row * BOARD_SIZE + col)) return;   // occupied: nothing to send
   logMoves();
   render();
   onlineSend({ type: 'move', square: row * BOARD_SIZE + col });
-}
-
-function onlineUndo() {
-  onlineSend({ type: 'undo' });
 }
 
 function onlineRematch() {
@@ -140,7 +139,7 @@ function onlineRematch() {
 function onlineEnter() {
   if (online.view === 'game' && online.state?.over) leaveGame();
   else if (online.view === 'game' && online.state) onlineSync(online.state.moves);
-  else if (online.view === 'menu') ai.reset();
+  else if (online.view === 'menu') clearMoves();
   if (online.view === 'menu') refreshMyRating();
 }
 
@@ -186,7 +185,7 @@ function joinGame(code) {
   online.code = code;
   online.state = null;
   history.replaceState(null, '', `?game=${code}`);
-  ai.reset();
+  clearMoves();
   render();
   openSocket(`/online/game/${code}`, onGameMessage, (event, opened) => {
     if (online.view !== 'game' || online.code !== code) return;
@@ -214,17 +213,20 @@ function onGameMessage(message) {
   }
 }
 
-// Bring the engine to the server's moves: play on when they extend the
-// board's (so the opponent's move animates), otherwise replay from the start.
+// Bring the moves (script.js's tree, one line online) to the server's: keep
+// those that match, drop the rest (a take-back), add the new ones. The board
+// follows the game if you were at its end; if you were looking back, it stays
+// on that move (unless it was taken back).
 function onlineSync(moves) {
-  const local = Array.from({ length: ai.move_count() }, (_, i) => ai.move_at(i));
-  const extend = local.length <= moves.length && local.every((m, i) => m === moves[i]);
-  if (!extend) ai.reset();
-  for (const square of moves.slice(extend ? local.length : 0)) {
-    if (!ai.play(Math.floor(square / BOARD_SIZE), square % BOARD_SIZE)) {
-      throw new Error(`the server sent an illegal move, ${squareName(square)}`);
-    }
-  }
+  const following = current.children.length === 0;
+  let node = root;
+  let i = 0;
+  for (; i < moves.length && node.children[0]?.square === moves[i]; i++) node = node.children[0];
+  node.children = [];
+  for (; i < moves.length; i++) node = node.children[0] = childOf(node, moves[i]);
+  let kept = true;
+  for (let n = current; n.parent; n = n.parent) kept &&= n.parent.children.includes(n);
+  goTo(following || !kept ? node : current);
 }
 
 function findOpponent() {
@@ -234,7 +236,7 @@ function findOpponent() {
   online.state = null;
   online.waiting = 0;
   history.replaceState(null, '', location.pathname);
-  ai.reset();
+  clearMoves();
   render();
   openSocket('/online/queue', message => {
     if (message.type === 'queued') {
@@ -299,7 +301,7 @@ function leaveGame() {
   online.code = null;
   online.state = null;
   history.replaceState(null, '', location.pathname);
-  ai.reset();
+  clearMoves();
   render();
   refreshMyRating();
 }
@@ -444,7 +446,8 @@ function renderOnline() {
   const s = online.state;
   const inGame = isOnline && online.view === 'game';
   const playing = inGame && Boolean(s?.you) && !s.over && Boolean(s.players[opposite(s.you)]);
-  resignButton.hidden = !playing;
+  resignButton.hidden = takeBackButton.hidden = !playing;
+  takeBackButton.disabled = !onlineCanUndo();
   quickAgainButton.hidden = !(inGame && s?.over && s.you);
   setSnack(isOnline ? snackMessage() : null);
   if (!isOnline) return;
@@ -491,7 +494,7 @@ function renderOnline() {
     deltaEl.classList.toggle('down', delta < 0);
     el.classList.toggle('away', !player.connected && !s.over);
   });
-  const toMove = gameOver() ? null : ai.current_player() === 0 ? 'green' : 'red';
+  const toMove = s.over ? null : s.moves.length % 2 === 0 ? 'green' : 'red';
   playersEl.classList.toggle('no-turn', toMove === null);
   playersEl.classList.toggle('over', Boolean(s.over));
   playersEl.classList.toggle('second', toMove === order[1]);
@@ -565,6 +568,7 @@ function renderOnline() {
 })();
 
 friendButton.addEventListener('click', playFriend);
+takeBackButton.addEventListener('click', () => onlineSend({ type: 'undo' }));
 cancelInviteButton.addEventListener('click', () => {
   onlineSend({ type: 'cancel' });      // the server deletes the game, so the link stops working
   leaveGame();
