@@ -71,6 +71,8 @@ async function ratingOf(env, id) {
 // What a page is told about a rating: rounded, and whether it is still provisional.
 export const shown = ({ rating, rd }) => ({ rating: Math.round(rating), provisional: rd > PROVISIONAL_RD });
 
+const lobby = (env) => env.LOBBY.get(env.LOBBY.idFromName('lobby'));
+
 function send(ws, message) {
   try {
     ws.send(JSON.stringify(message));
@@ -120,6 +122,7 @@ export class Room extends DurableObject {
   // Delete the game and close its sockets: it expired, or was cancelled before anyone joined.
   async close(reason) {
     for (const ws of this.ctx.getWebSockets()) ws.close(1000, reason);
+    await lobby(this.env).playing(this.ctx.id.toString(), []);
     await this.ctx.storage.deleteAlarm();
     await this.ctx.storage.deleteAll();
   }
@@ -158,6 +161,7 @@ export class Room extends DurableObject {
     const [client, server] = Object.values(new WebSocketPair());
     this.ctx.acceptWebSocket(server);
     server.serializeAttachment({ colour });
+    if (colour) await this.reportPlayers();
     if (colour) {
       const left = await this.ctx.storage.get('left');
       delete left[colour];
@@ -200,7 +204,17 @@ export class Room extends DurableObject {
         await this.ctx.storage.put('left', left);
       }
     }
-    if (await this.ctx.storage.get('seats')) await this.broadcast();
+    if (await this.ctx.storage.get('seats')) {
+      await this.broadcast();
+      if (colour) await this.reportPlayers(ws);
+    }
+  }
+
+  // Tell the Lobby which players are here, for its count of people online.
+  async reportPlayers(except = null) {
+    const seats = await this.ctx.storage.get('seats');
+    const here = PLAYERS.filter((c) => seats[c] && this.connected(c, except)).map((c) => seats[c].id);
+    await lobby(this.env).playing(this.ctx.id.toString(), here);
   }
 
   async webSocketError(ws) {
@@ -357,18 +371,27 @@ export class Lobby extends DurableObject {
     answerPings(ctx);
   }
 
+  // A socket in the queue (/online/queue), or one that only hears how many
+  // are online (/online/presence, from the Online tab's menu).
   async fetch(request) {
     if (request.headers.get('Upgrade') !== 'websocket') return new Response('expected a WebSocket', { status: 426 });
-    const params = new URL(request.url).searchParams;
-    const me = await player(this.env, params.get('player'), params.get('key') ?? '');
+    const url = new URL(request.url);
+    const me = await player(this.env, url.searchParams.get('player'), url.searchParams.get('key') ?? '');
     if (!me) return new Response('unknown player, or the wrong key', { status: 403 });
+    const queue = url.pathname === '/online/queue';
 
-    // One place in the queue per player: a second tab replaces the first.
-    for (const ws of this.ctx.getWebSockets(me.id)) ws.close(4000, 'You joined the queue elsewhere.');
     const [client, server] = Object.values(new WebSocketPair());
-    this.ctx.acceptWebSocket(server, [me.id]);
-    server.serializeAttachment({ ...me, since: Date.now() });
-    await this.match();
+    if (queue) {
+      // One place in the queue per player: a second tab replaces the first.
+      for (const ws of this.ctx.getWebSockets(`queue:${me.id}`)) ws.close(4000, 'You joined the queue elsewhere.');
+      this.ctx.acceptWebSocket(server, ['queue', `queue:${me.id}`]);
+      server.serializeAttachment({ ...me, since: Date.now() });
+    } else {
+      this.ctx.acceptWebSocket(server, ['presence']);
+      server.serializeAttachment({ id: me.id });
+    }
+    if (queue) await this.match();
+    await this.announce();
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -377,6 +400,25 @@ export class Lobby extends DurableObject {
   async webSocketClose(ws) {
     closeQuietly(ws);
     await this.tell();
+    await this.announce();
+  }
+
+  // A Room's connected players (none when it closes), kept for the count.
+  async playing(room, ids) {
+    const rooms = (await this.ctx.storage.get('rooms')) ?? {};
+    if (ids.length) rooms[room] = ids;
+    else delete rooms[room];
+    await this.ctx.storage.put('rooms', rooms);
+    await this.announce(rooms);
+  }
+
+  // Tell every socket how many people are online: on the menu, in the queue,
+  // or in a game, each player once however many tabs they have.
+  async announce(rooms = null) {
+    rooms ??= (await this.ctx.storage.get('rooms')) ?? {};
+    const open = this.ctx.getWebSockets().filter((ws) => ws.readyState === WebSocket.OPEN);
+    const ids = new Set([...open.map((ws) => ws.deserializeAttachment().id), ...Object.values(rooms).flat()]);
+    for (const ws of open) send(ws, { type: 'online', count: ids.size });
   }
 
   async alarm() {
@@ -384,7 +426,7 @@ export class Lobby extends DurableObject {
   }
 
   waiting() {
-    return this.ctx.getWebSockets().filter((ws) => ws.readyState === WebSocket.OPEN)
+    return this.ctx.getWebSockets('queue').filter((ws) => ws.readyState === WebSocket.OPEN)
       .map((ws) => ({ ws, ...ws.deserializeAttachment() }))
       .sort((a, b) => a.since - b.since);
   }

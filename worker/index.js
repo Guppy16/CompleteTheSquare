@@ -6,6 +6,7 @@
 //   POST /online/me    {"player": id, "key": key}                     -> {"rating", "provisional", "games"}
 //   POST /online/new   {"player": id, "key": key, "colour": "green"}  -> {"game": code}  (a friend game)
 //   GET  /online/queue?player=&key=        a WebSocket: wait for an opponent (a quick match)
+//   GET  /online/presence?player=&key=     a WebSocket: how many people are online
 //   GET  /online/game/<code>?player=&key=  a WebSocket: play or watch a game
 //
 // Only the game is stored: no IP, no user ID. The rate limiter counts requests
@@ -43,7 +44,9 @@ async function online(request, env, pathname) {
   const { success } = await env.ONLINE_LIMITER.limit({ key: request.headers.get('CF-Connecting-IP') || 'unknown' });
   if (!success) return reply(429, 'too many requests: wait a minute');
 
-  if (pathname === '/online/queue') return env.LOBBY.get(env.LOBBY.idFromName('lobby')).fetch(request);
+  if (pathname === '/online/queue' || pathname === '/online/presence') {
+    return env.LOBBY.get(env.LOBBY.idFromName('lobby')).fetch(request);
+  }
   const game = /^\/online\/game\/([^/]+)$/.exec(pathname);
   if (game) {
     if (!CODE_PATTERN.test(game[1])) return reply(404, 'There is no such game.');

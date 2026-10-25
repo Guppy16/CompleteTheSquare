@@ -849,6 +849,32 @@ body.no-game :is(#board-area, #status, #controls, #move-list) {
   to { transform: scale(2); opacity: 0; }
 }
 
+/* How many people are online, with a dot that breathes. */
+#online-menu .online-count {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+}
+
+#online-menu .online-count[hidden] {
+  display: none;
+}
+
+#online-menu .online-count i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--button);
+  animation: breathe calc(2.4s * var(--motion)) ease-in-out infinite;
+}
+
+@keyframes breathe {
+  50% { opacity: 0.35; }
+}
+
 #play-friend {
   display: inline-flex;
   align-items: center;

@@ -71,6 +71,17 @@ assert.deepEqual(me.body, { rating: 1500, provisional: true, games: 0 });
 assert.equal((await post('/online/me', { ...alice, key: bob.key })).status, 403);
 await post('/online/me', bob);
 
+step('people online: the menu counts each player once, and leaving takes them off');
+const pa = connect('/online/presence', alice);
+await pa.opened;
+const online = (m) => m.type === 'online';
+const base = (await pa.next(online)).count;
+const pb = connect('/online/presence', bob);
+await pb.opened;
+await pa.next((m) => online(m) && m.count === base + 1);
+pb.close();
+await pa.next((m) => online(m) && m.count === base);
+
 step('a friend game nobody has joined can be cancelled, and its link stops working');
 const cancelled = (await post('/online/new', { ...alice, colour: 'green' })).body.game;
 const x = connect(`/online/game/${cancelled}`, alice);
@@ -99,6 +110,8 @@ s = await b.next(state());
 assert.equal(s.you, 'red');
 s = await a.next(state((m) => m.players.red?.connected));
 assert.equal(s.players.red.rating, 1500);
+await pa.next((m) => online(m) && m.count === base + 1);    // Bob counts while in the game
+pa.close();
 a.send({ type: 'cancel' });
 assert.match((await a.next((m) => m.type === 'error')).message, /resign instead/);
 

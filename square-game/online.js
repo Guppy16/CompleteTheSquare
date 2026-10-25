@@ -33,6 +33,7 @@ const slideEl = document.getElementById('quick-match');
 const knobEl = slideEl.querySelector('.slide-knob');
 const slideLabelEl = slideEl.querySelector('.slide-label');
 const friendButton = document.getElementById('play-friend');
+const countEl = menuEl.querySelector('.online-count');
 const inviteEl = document.getElementById('online-invite');
 const linkButton = inviteEl.querySelector('.link');
 const cancelInviteButton = document.getElementById('cancel-invite');
@@ -48,7 +49,7 @@ const snackbarEl = document.getElementById('snackbar');
 // socket: the open WebSocket, to the queue or to a game.
 const online = {
   view: 'menu', code: null, state: null, socket: null, me: null, waiting: 0,
-  notice: null, retries: 0, pinger: null,
+  notice: null, retries: 0, pinger: null, presence: null, count: 0,
 };
 
 function onlinePlayer() {
@@ -239,7 +240,10 @@ function findOpponent() {
   clearMoves();
   render();
   openSocket('/online/queue', message => {
-    if (message.type === 'queued') {
+    if (message.type === 'online') {
+      online.count = message.count;
+      renderOnline();
+    } else if (message.type === 'queued') {
       online.waiting = message.waiting;
       online.me = { ...online.me, rating: message.rating, provisional: message.provisional };
       renderOnline();
@@ -321,6 +325,37 @@ function onlineFromUrl() {
   if (!code) return;
   setMode('online');
   joinGame(code.toLowerCase());
+}
+
+// --- How many are online ------------------------------------------------------
+// While the menu shows, a socket to the Lobby hears how many people are online
+// (in the queue, that socket says it).
+
+function syncPresence() {
+  const wanted = mode === 'online' && online.view === 'menu';
+  if (wanted && !online.presence) {
+    const ws = new WebSocket(`${ONLINE_WS}/online/presence?player=${identity.player}&key=${identity.key}`);
+    const pinger = setInterval(() => ws.readyState === WebSocket.OPEN && ws.send('ping'), PING_MS);
+    online.presence = ws;
+    ws.onmessage = ({ data }) => {
+      if (data === 'pong') return;
+      const message = JSON.parse(data);
+      if (message.type === 'online') {
+        online.count = message.count;
+        renderOnline();
+      }
+    };
+    ws.onclose = () => {
+      clearInterval(pinger);
+      if (online.presence !== ws) return;
+      online.presence = null;
+      setTimeout(syncPresence, RECONNECT_MS.at(-1));   // dropped: try again in a while
+    };
+  } else if (!wanted && online.presence) {
+    const ws = online.presence;
+    online.presence = null;
+    ws.close();
+  }
 }
 
 // --- Rating history ----------------------------------------------------------
@@ -450,6 +485,7 @@ function renderOnline() {
   takeBackButton.disabled = !onlineCanUndo();
   quickAgainButton.hidden = !(inGame && s?.over && s.you);
   setSnack(isOnline ? snackMessage() : null);
+  syncPresence();
   if (!isOnline) return;
 
   const waitingForFriend = inGame && s?.you && !s.players[opposite(s.you)];
@@ -469,6 +505,8 @@ function renderOnline() {
     slideLabelEl.textContent = !searching ? 'slide to play'
       : online.waiting > 1 ? `finding someone: ${online.waiting} waiting` : 'finding someone';
     friendButton.disabled = searching;
+    countEl.hidden = online.count < 2;     // not when it would only be you
+    countEl.querySelector('span').textContent = `${online.count} online`;
     return;
   }
   if (waitingForFriend) {
